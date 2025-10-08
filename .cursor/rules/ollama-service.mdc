@@ -1,0 +1,728 @@
+---
+alwaysApply: false
+---
+# Ollama服务模块 - 开发提示词
+
+## 模块概述
+Ollama服务模块负责集成本地大语言模型，通过调用Ollama API生成救援方案。该模块处理提示词模板管理、流式响应处理、模型性能监控等功能。
+
+## 技术栈
+- **大语言模型**: Ollama (支持qwen2.5/llama3.1)
+- **HTTP客户端**: httpx + asyncio
+- **模板引擎**: Jinja2
+- **流式处理**: Server-Sent Events (SSE)
+- **数据验证**: Pydantic
+
+## 核心职责
+1. 管理Ollama本地模型连接
+2. 处理提示词模板管理
+3. 生成自然语言救援方案
+4. 提供流式响应处理
+5. 监控模型性能
+6. 实现错误处理和重试机制
+
+## 数据模型定义
+
+### 模型配置
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Literal
+from datetime import datetime
+from enum import Enum
+
+class ModelType(str, Enum):
+    """模型类型枚举"""
+    QWEN2_5 = "qwen2.5:7b"
+    QWEN2_5_14B = "qwen2.5:14b"
+    LLAMA3_1 = "llama3.1:8b"
+    LLAMA3_1_70B = "llama3.1:70b"
+
+class ModelConfig(BaseModel):
+    """模型配置"""
+    name: str = Field(..., description="模型名称")
+    type: ModelType = Field(..., description="模型类型")
+    base_url: str = Field(default="http://localhost:11434", description="Ollama服务地址")
+    temperature: float = Field(default=0.7, description="温度参数", ge=0.0, le=2.0)
+    top_p: float = Field(default=0.9, description="Top-p参数", ge=0.0, le=1.0)
+    max_tokens: int = Field(default=2048, description="最大令牌数", ge=1, le=8192)
+    timeout: int = Field(default=300, description="超时时间(秒)", ge=10, le=600)
+
+class GenerationRequest(BaseModel):
+    """生成请求模型"""
+    prompt: str = Field(..., description="提示词", min_length=1, max_length=10000)
+    model_config: ModelConfig = Field(..., description="模型配置")
+    stream: bool = Field(default=False, description="是否流式输出")
+    context: Optional[Dict[str, Any]] = Field(None, description="上下文数据")
+
+class GenerationResponse(BaseModel):
+    """生成响应模型"""
+    response_id: str = Field(..., description="响应ID")
+    content: str = Field(..., description="生成内容")
+    model_used: str = Field(..., description="使用的模型")
+    tokens_used: int = Field(..., description="使用的令牌数")
+    generation_time: float = Field(..., description="生成时间(秒)")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
+
+class StreamChunk(BaseModel):
+    """流式响应块"""
+    chunk_id: str = Field(..., description="块ID")
+    content: str = Field(..., description="内容块")
+    is_final: bool = Field(default=False, description="是否为最后一块")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="时间戳")
+
+class ModelStatus(BaseModel):
+    """模型状态"""
+    model_name: str = Field(..., description="模型名称")
+    is_available: bool = Field(..., description="是否可用")
+    memory_usage: Optional[float] = Field(None, description="内存使用量(MB)")
+    last_used: Optional[datetime] = Field(None, description="最后使用时间")
+    response_time: Optional[float] = Field(None, description="平均响应时间(秒)")
+```
+
+### 救援方案生成模型
+```python
+class RescuePlanGenerationRequest(BaseModel):
+    """救援方案生成请求"""
+    items: List[Dict[str, Any]] = Field(..., description="物品信息")
+    environment: Dict[str, Any] = Field(..., description="环境信息")
+    knowledge_context: str = Field(..., description="知识图谱上下文")
+    rag_context: str = Field(..., description="RAG上下文")
+    additional_requirements: Optional[str] = Field(None, description="额外要求")
+
+class RescuePlanGenerationResponse(BaseModel):
+    """救援方案生成响应"""
+    plan_id: str = Field(..., description="方案ID")
+    title: str = Field(..., description="方案标题")
+    priority: str = Field(..., description="优先级")
+    steps: List[Dict[str, Any]] = Field(..., description="救援步骤")
+    equipment: List[str] = Field(..., description="所需设备")
+    warnings: List[str] = Field(..., description="注意事项")
+    estimated_duration: int = Field(..., description="预计时长(分钟)")
+    confidence_score: float = Field(..., description="置信度分数")
+    generation_metadata: Dict[str, Any] = Field(..., description="生成元数据")
+```
+
+## API接口规范
+
+### 1. 生成救援方案
+```python
+@router.post("/generate-rescue-plan", response_model=RescuePlanGenerationResponse)
+async def generate_rescue_plan(
+    request: RescuePlanGenerationRequest,
+    current_user: User = Depends(get_current_user)
+) -> RescuePlanGenerationResponse:
+    """
+    生成救援方案
+    
+    Args:
+        request: 生成请求
+        current_user: 当前用户
+        
+    Returns:
+        RescuePlanGenerationResponse: 生成的救援方案
+        
+    Raises:
+        HTTPException: 400 - 请求参数无效
+        HTTPException: 500 - 模型生成错误
+    """
+```
+
+### 2. 流式生成救援方案
+```python
+@router.post("/generate-rescue-plan/stream")
+async def stream_generate_rescue_plan(
+    request: RescuePlanGenerationRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    流式生成救援方案
+    
+    Args:
+        request: 生成请求
+        current_user: 当前用户
+        
+    Yields:
+        StreamChunk: 流式响应块
+    """
+```
+
+### 3. 获取模型状态
+```python
+@router.get("/models/status", response_model=List[ModelStatus])
+async def get_models_status(
+    current_user: User = Depends(get_current_user)
+) -> List[ModelStatus]:
+    """
+    获取所有模型状态
+    
+    Args:
+        current_user: 当前用户
+        
+    Returns:
+        List[ModelStatus]: 模型状态列表
+    """
+```
+
+### 4. 切换模型
+```python
+@router.post("/models/switch")
+async def switch_model(
+    model_name: str,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    切换当前使用的模型
+    
+    Args:
+        model_name: 模型名称
+        current_user: 当前用户
+        
+    Returns:
+        dict: 切换结果
+    """
+```
+
+## 核心服务类
+
+### Ollama服务类
+```python
+import httpx
+import asyncio
+import json
+import uuid
+from jinja2 import Template
+from typing import AsyncGenerator, Optional
+import time
+
+class OllamaService:
+    def __init__(self, base_url: str = "http://localhost:11434"):
+        self.base_url = base_url
+        self.client = httpx.AsyncClient(timeout=300.0)
+        self.current_model = "qwen2.5:7b"
+        self.template_manager = PromptTemplateManager()
+        self.model_monitor = ModelMonitor()
+    
+    async def generate_rescue_plan(
+        self, 
+        request: RescuePlanGenerationRequest
+    ) -> RescuePlanGenerationResponse:
+        """生成救援方案"""
+        try:
+            # 构建提示词
+            prompt = await self._build_rescue_plan_prompt(request)
+            
+            # 生成内容
+            generation_request = GenerationRequest(
+                prompt=prompt,
+                model_config=ModelConfig(
+                    name=self.current_model,
+                    type=ModelType(self.current_model),
+                    base_url=self.base_url
+                ),
+                context={
+                    "items": request.items,
+                    "environment": request.environment,
+                    "knowledge_context": request.knowledge_context,
+                    "rag_context": request.rag_context
+                }
+            )
+            
+            response = await self._generate_content(generation_request)
+            
+            # 解析响应
+            rescue_plan = await self._parse_rescue_plan_response(response.content)
+            
+            # 更新模型监控
+            await self.model_monitor.record_usage(
+                model_name=self.current_model,
+                response_time=response.generation_time,
+                tokens_used=response.tokens_used
+            )
+            
+            return rescue_plan
+            
+        except Exception as e:
+            logger.error(f"生成救援方案失败: {str(e)}")
+            raise OllamaServiceError(f"生成救援方案失败: {str(e)}")
+    
+    async def stream_generate_rescue_plan(
+        self, 
+        request: RescuePlanGenerationRequest
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """流式生成救援方案"""
+        try:
+            # 构建提示词
+            prompt = await self._build_rescue_plan_prompt(request)
+            
+            # 流式生成
+            generation_request = GenerationRequest(
+                prompt=prompt,
+                model_config=ModelConfig(
+                    name=self.current_model,
+                    type=ModelType(self.current_model),
+                    base_url=self.base_url
+                ),
+                stream=True,
+                context={
+                    "items": request.items,
+                    "environment": request.environment,
+                    "knowledge_context": request.knowledge_context,
+                    "rag_context": request.rag_context
+                }
+            )
+            
+            async for chunk in self._stream_generate_content(generation_request):
+                yield chunk
+                
+        except Exception as e:
+            logger.error(f"流式生成救援方案失败: {str(e)}")
+            raise OllamaServiceError(f"流式生成救援方案失败: {str(e)}")
+    
+    async def get_model_status(self, model_name: str) -> ModelStatus:
+        """获取模型状态"""
+        try:
+            # 检查模型是否可用
+            is_available = await self._check_model_availability(model_name)
+            
+            # 获取模型信息
+            model_info = await self._get_model_info(model_name)
+            
+            # 获取监控数据
+            monitor_data = await self.model_monitor.get_model_stats(model_name)
+            
+            return ModelStatus(
+                model_name=model_name,
+                is_available=is_available,
+                memory_usage=model_info.get("memory_usage"),
+                last_used=monitor_data.get("last_used"),
+                response_time=monitor_data.get("average_response_time")
+            )
+            
+        except Exception as e:
+            logger.error(f"获取模型状态失败: {str(e)}")
+            raise OllamaServiceError(f"获取模型状态失败: {str(e)}")
+    
+    async def switch_model(self, model_name: str) -> bool:
+        """切换模型"""
+        try:
+            # 检查模型是否可用
+            if not await self._check_model_availability(model_name):
+                raise OllamaServiceError(f"模型 {model_name} 不可用")
+            
+            # 更新当前模型
+            self.current_model = model_name
+            
+            # 预热模型
+            await self._warm_up_model(model_name)
+            
+            logger.info(f"成功切换到模型: {model_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"切换模型失败: {str(e)}")
+            raise OllamaServiceError(f"切换模型失败: {str(e)}")
+    
+    async def _build_rescue_plan_prompt(self, request: RescuePlanGenerationRequest) -> str:
+        """构建救援方案提示词"""
+        template = self.template_manager.get_template("rescue_plan_generation")
+        
+        context = {
+            "items": request.items,
+            "environment": request.environment,
+            "knowledge_context": request.knowledge_context,
+            "rag_context": request.rag_context,
+            "additional_requirements": request.additional_requirements or ""
+        }
+        
+        return template.render(context)
+    
+    async def _generate_content(self, request: GenerationRequest) -> GenerationResponse:
+        """生成内容"""
+        start_time = time.time()
+        
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": request.model_config.name,
+                    "prompt": request.prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": request.model_config.temperature,
+                        "top_p": request.model_config.top_p,
+                        "num_predict": request.model_config.max_tokens
+                    }
+                }
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            generation_time = time.time() - start_time
+            
+            return GenerationResponse(
+                response_id=str(uuid.uuid4()),
+                content=result["response"],
+                model_used=request.model_config.name,
+                tokens_used=result.get("eval_count", 0),
+                generation_time=generation_time
+            )
+            
+        except httpx.HTTPError as e:
+            raise OllamaServiceError(f"HTTP请求失败: {str(e)}")
+        except Exception as e:
+            raise OllamaServiceError(f"生成内容失败: {str(e)}")
+    
+    async def _stream_generate_content(
+        self, 
+        request: GenerationRequest
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """流式生成内容"""
+        try:
+            async with self.client.stream(
+                "POST",
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": request.model_config.name,
+                    "prompt": request.prompt,
+                    "stream": True,
+                    "options": {
+                        "temperature": request.model_config.temperature,
+                        "top_p": request.model_config.top_p,
+                        "num_predict": request.model_config.max_tokens
+                    }
+                }
+            ) as response:
+                response.raise_for_status()
+                
+                chunk_id = 0
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            if "response" in data:
+                                chunk = StreamChunk(
+                                    chunk_id=str(chunk_id),
+                                    content=data["response"],
+                                    is_final=data.get("done", False)
+                                )
+                                yield chunk
+                                chunk_id += 1
+                        except json.JSONDecodeError:
+                            continue
+                            
+        except httpx.HTTPError as e:
+            raise OllamaServiceError(f"流式HTTP请求失败: {str(e)}")
+        except Exception as e:
+            raise OllamaServiceError(f"流式生成内容失败: {str(e)}")
+```
+
+## 提示词模板管理
+
+### 模板管理器
+```python
+from jinja2 import Environment, FileSystemLoader
+from typing import Dict
+
+class PromptTemplateManager:
+    def __init__(self, template_dir: str = "templates"):
+        self.env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=True
+        )
+        self.templates = {}
+        self._load_templates()
+    
+    def _load_templates(self):
+        """加载所有模板"""
+        template_names = [
+            "rescue_plan_generation",
+            "emergency_assessment",
+            "equipment_recommendation",
+            "safety_warning"
+        ]
+        
+        for name in template_names:
+            try:
+                self.templates[name] = self.env.get_template(f"{name}.j2")
+            except Exception as e:
+                logger.warning(f"加载模板 {name} 失败: {str(e)}")
+    
+    def get_template(self, name: str) -> Template:
+        """获取模板"""
+        if name not in self.templates:
+            raise ValueError(f"模板 {name} 不存在")
+        return self.templates[name]
+```
+
+### 救援方案生成模板
+```jinja2
+{# rescue_plan_generation.j2 #}
+你是一个专业的火灾应急救援专家。请根据以下信息生成详细的救援方案：
+
+## 物品信息
+{% for item in items %}
+- 物品名称: {{ item.name }}
+- 材质: {{ item.material }}
+- 数量: {{ item.quantity }}
+- 位置: {{ item.location }}
+{% if item.condition %}状态: {{ item.condition }}{% endif %}
+{% if item.flammability %}易燃性: {{ item.flammability }}{% endif %}
+{% if item.toxicity %}毒性: {{ item.toxicity }}{% endif %}
+{% endfor %}
+
+## 环境信息
+- 环境类型: {{ environment.type }}
+- 区域: {{ environment.area }}
+{% if environment.floor %}楼层: {{ environment.floor }}{% endif %}
+- 通风情况: {{ environment.ventilation }}
+- 出口数量: {{ environment.exits }}
+{% if environment.occupancy %}人员数量: {{ environment.occupancy }}{% endif %}
+
+## 知识图谱上下文
+{{ knowledge_context }}
+
+## 相关文档信息
+{{ rag_context }}
+
+{% if additional_requirements %}
+## 额外要求
+{{ additional_requirements }}
+{% endif %}
+
+请生成一个结构化的救援方案，包含以下内容：
+1. 方案标题
+2. 优先级评估（低/中/高/紧急）
+3. 详细的救援步骤（按顺序列出）
+4. 所需设备清单
+5. 安全注意事项
+6. 预计救援时间
+
+请以JSON格式返回结果，确保格式正确且易于解析。
+```
+
+## 模型监控
+
+### 模型监控器
+```python
+import asyncio
+from datetime import datetime, timedelta
+from typing import Dict, Optional
+import statistics
+
+class ModelMonitor:
+    def __init__(self):
+        self.usage_stats = {}
+        self.response_times = {}
+        self.token_counts = {}
+    
+    async def record_usage(
+        self, 
+        model_name: str, 
+        response_time: float, 
+        tokens_used: int
+    ):
+        """记录模型使用情况"""
+        if model_name not in self.usage_stats:
+            self.usage_stats[model_name] = {
+                "total_requests": 0,
+                "total_tokens": 0,
+                "last_used": None
+            }
+            self.response_times[model_name] = []
+            self.token_counts[model_name] = []
+        
+        stats = self.usage_stats[model_name]
+        stats["total_requests"] += 1
+        stats["total_tokens"] += tokens_used
+        stats["last_used"] = datetime.utcnow()
+        
+        self.response_times[model_name].append(response_time)
+        self.token_counts[model_name].append(tokens_used)
+        
+        # 保持最近1000次记录
+        if len(self.response_times[model_name]) > 1000:
+            self.response_times[model_name] = self.response_times[model_name][-1000:]
+        if len(self.token_counts[model_name]) > 1000:
+            self.token_counts[model_name] = self.token_counts[model_name][-1000:]
+    
+    async def get_model_stats(self, model_name: str) -> Dict[str, Any]:
+        """获取模型统计信息"""
+        if model_name not in self.usage_stats:
+            return {}
+        
+        stats = self.usage_stats[model_name]
+        response_times = self.response_times.get(model_name, [])
+        token_counts = self.token_counts.get(model_name, [])
+        
+        return {
+            "total_requests": stats["total_requests"],
+            "total_tokens": stats["total_tokens"],
+            "last_used": stats["last_used"],
+            "average_response_time": statistics.mean(response_times) if response_times else 0,
+            "average_tokens": statistics.mean(token_counts) if token_counts else 0,
+            "max_response_time": max(response_times) if response_times else 0,
+            "min_response_time": min(response_times) if response_times else 0
+        }
+```
+
+## 错误处理和重试
+
+### 重试机制
+```python
+import asyncio
+from functools import wraps
+from typing import Callable, Any
+
+class RetryManager:
+    def __init__(self, max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
+        self.max_retries = max_retries
+        self.delay = delay
+        self.backoff = backoff
+    
+    def retry(self, func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            current_delay = self.delay
+            
+            for attempt in range(self.max_retries + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < self.max_retries:
+                        logger.warning(f"尝试 {attempt + 1} 失败，{current_delay}秒后重试: {str(e)}")
+                        await asyncio.sleep(current_delay)
+                        current_delay *= self.backoff
+                    else:
+                        logger.error(f"所有重试尝试都失败了: {str(e)}")
+            
+            raise last_exception
+        return wrapper
+```
+
+## 性能优化
+
+### 1. 连接池管理
+```python
+class OllamaConnectionPool:
+    def __init__(self, base_url: str, pool_size: int = 10):
+        self.base_url = base_url
+        self.pool_size = pool_size
+        self.semaphore = asyncio.Semaphore(pool_size)
+        self.clients = []
+    
+    async def get_client(self) -> httpx.AsyncClient:
+        """获取HTTP客户端"""
+        await self.semaphore.acquire()
+        if not self.clients:
+            client = httpx.AsyncClient(timeout=300.0)
+            self.clients.append(client)
+        return self.clients.pop()
+    
+    async def return_client(self, client: httpx.AsyncClient):
+        """归还HTTP客户端"""
+        self.clients.append(client)
+        self.semaphore.release()
+```
+
+### 2. 模型预热
+```python
+class ModelWarmup:
+    def __init__(self, ollama_service: OllamaService):
+        self.ollama_service = ollama_service
+    
+    async def warm_up_model(self, model_name: str):
+        """预热模型"""
+        try:
+            # 发送一个简单的请求来预热模型
+            warmup_request = GenerationRequest(
+                prompt="Hello, this is a warmup request.",
+                model_config=ModelConfig(
+                    name=model_name,
+                    type=ModelType(model_name),
+                    base_url=self.ollama_service.base_url
+                )
+            )
+            
+            await self.ollama_service._generate_content(warmup_request)
+            logger.info(f"模型 {model_name} 预热完成")
+            
+        except Exception as e:
+            logger.warning(f"模型 {model_name} 预热失败: {str(e)}")
+```
+
+## 测试要求
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+
+class TestOllamaService:
+    @pytest.fixture
+    def mock_ollama_service(self):
+        service = OllamaService("http://localhost:11434")
+        service.client = AsyncMock()
+        return service
+    
+    @pytest.mark.asyncio
+    async def test_generate_rescue_plan(self, mock_ollama_service):
+        # 模拟HTTP响应
+        mock_response = Mock()
+        mock_response.json.return_value = {"response": "测试救援方案"}
+        mock_response.raise_for_status.return_value = None
+        mock_ollama_service.client.post.return_value = mock_response
+        
+        request = RescuePlanGenerationRequest(
+            items=[{"name": "椅子", "material": "木质"}],
+            environment={"type": "室内", "area": "客厅"},
+            knowledge_context="测试知识",
+            rag_context="测试文档"
+        )
+        
+        result = await mock_ollama_service.generate_rescue_plan(request)
+        
+        assert isinstance(result, RescuePlanGenerationResponse)
+        assert result.content == "测试救援方案"
+```
+
+## 部署配置
+
+### 环境变量
+```bash
+# Ollama配置
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_DEFAULT_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT=300
+OLLAMA_MAX_RETRIES=3
+
+# 模型配置
+MODEL_TEMPERATURE=0.7
+MODEL_TOP_P=0.9
+MODEL_MAX_TOKENS=2048
+
+# 性能配置
+CONNECTION_POOL_SIZE=10
+MODEL_WARMUP_ENABLED=true
+MONITORING_ENABLED=true
+```
+
+### Docker配置
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# 安装Ollama（如果需要）
+RUN curl -fsSL https://ollama.ai/install.sh | sh
+
+COPY . .
+EXPOSE 8003
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
+```
+
+这个提示词文件提供了Ollama服务模块的完整开发指南，包括模型管理、提示词模板、流式处理、性能监控等各个方面，确保开发人员能够顺利实现该模块。

@@ -1,0 +1,784 @@
+---
+alwaysApply: false
+---
+# 用户服务模块 - 开发提示词
+
+## 模块概述
+用户服务模块负责用户认证、授权和权限管理，提供JWT令牌管理、用户注册登录、角色权限控制、会话管理等功能，确保系统安全性和用户数据保护。
+
+## 技术栈
+- **认证框架**: JWT + OAuth2
+- **密码加密**: bcrypt + passlib
+- **数据库**: PostgreSQL + SQLAlchemy
+- **会话管理**: Redis + JWT
+- **权限控制**: RBAC (基于角色的访问控制)
+
+## 核心职责
+1. 用户注册和登录管理
+2. JWT令牌生成和验证
+3. 角色权限控制
+4. 会话管理和超时控制
+5. 用户信息管理
+6. 审计日志记录
+
+## 数据模型定义
+
+### 用户模型
+```python
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from enum import Enum
+import uuid
+
+class UserRole(str, Enum):
+    """用户角色枚举"""
+    ADMIN = "admin"
+    OPERATOR = "operator"
+    USER = "user"
+    GUEST = "guest"
+
+class UserStatus(str, Enum):
+    """用户状态枚举"""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
+    PENDING = "pending"
+
+class UserBase(BaseModel):
+    """用户基础模型"""
+    username: str = Field(..., description="用户名", min_length=3, max_length=50)
+    email: EmailStr = Field(..., description="邮箱地址")
+    full_name: Optional[str] = Field(None, description="全名", max_length=100)
+    phone: Optional[str] = Field(None, description="手机号", max_length=20)
+
+class UserCreate(UserBase):
+    """用户创建模型"""
+    password: str = Field(..., description="密码", min_length=8, max_length=100)
+    confirm_password: str = Field(..., description="确认密码")
+    role: UserRole = Field(default=UserRole.USER, description="用户角色")
+
+class UserUpdate(BaseModel):
+    """用户更新模型"""
+    full_name: Optional[str] = Field(None, description="全名", max_length=100)
+    phone: Optional[str] = Field(None, description="手机号", max_length=20)
+    status: Optional[UserStatus] = Field(None, description="用户状态")
+
+class UserResponse(UserBase):
+    """用户响应模型"""
+    id: str = Field(..., description="用户ID")
+    role: UserRole = Field(..., description="用户角色")
+    status: UserStatus = Field(..., description="用户状态")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    last_login: Optional[datetime] = Field(None, description="最后登录时间")
+
+class UserInDB(UserResponse):
+    """数据库中的用户模型"""
+    hashed_password: str = Field(..., description="加密密码")
+
+class LoginRequest(BaseModel):
+    """登录请求模型"""
+    username: str = Field(..., description="用户名或邮箱")
+    password: str = Field(..., description="密码")
+    remember_me: bool = Field(default=False, description="记住我")
+
+class LoginResponse(BaseModel):
+    """登录响应模型"""
+    access_token: str = Field(..., description="访问令牌")
+    refresh_token: str = Field(..., description="刷新令牌")
+    token_type: str = Field(default="bearer", description="令牌类型")
+    expires_in: int = Field(..., description="过期时间(秒)")
+    user: UserResponse = Field(..., description="用户信息")
+
+class TokenData(BaseModel):
+    """令牌数据模型"""
+    user_id: str = Field(..., description="用户ID")
+    username: str = Field(..., description="用户名")
+    role: UserRole = Field(..., description="用户角色")
+    exp: datetime = Field(..., description="过期时间")
+```
+
+### 权限模型
+```python
+class Permission(str, Enum):
+    """权限枚举"""
+    # 救援方案权限
+    CREATE_RESCUE_PLAN = "create_rescue_plan"
+    READ_RESCUE_PLAN = "read_rescue_plan"
+    UPDATE_RESCUE_PLAN = "update_rescue_plan"
+    DELETE_RESCUE_PLAN = "delete_rescue_plan"
+    
+    # 知识库权限
+    READ_KNOWLEDGE = "read_knowledge"
+    MANAGE_KNOWLEDGE = "manage_knowledge"
+    
+    # 用户管理权限
+    MANAGE_USERS = "manage_users"
+    VIEW_USERS = "view_users"
+    
+    # 系统管理权限
+    MANAGE_SYSTEM = "manage_system"
+    VIEW_LOGS = "view_logs"
+    MANAGE_CACHE = "manage_cache"
+
+class RolePermission(BaseModel):
+    """角色权限模型"""
+    role: UserRole = Field(..., description="角色")
+    permissions: List[Permission] = Field(..., description="权限列表")
+
+class PermissionCheck(BaseModel):
+    """权限检查模型"""
+    user_id: str = Field(..., description="用户ID")
+    permission: Permission = Field(..., description="权限")
+    resource_id: Optional[str] = Field(None, description="资源ID")
+```
+
+### 会话模型
+```python
+class SessionData(BaseModel):
+    """会话数据模型"""
+    session_id: str = Field(..., description="会话ID")
+    user_id: str = Field(..., description="用户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    expires_at: datetime = Field(..., description="过期时间")
+    ip_address: Optional[str] = Field(None, description="IP地址")
+    user_agent: Optional[str] = Field(None, description="用户代理")
+    is_active: bool = Field(default=True, description="是否活跃")
+
+class SessionCreate(BaseModel):
+    """会话创建模型"""
+    user_id: str = Field(..., description="用户ID")
+    ip_address: Optional[str] = Field(None, description="IP地址")
+    user_agent: Optional[str] = Field(None, description="用户代理")
+    expires_in: int = Field(default=3600, description="过期时间(秒)")
+```
+
+## API接口规范
+
+### 1. 用户注册
+```python
+@router.post("/register", response_model=UserResponse)
+async def register_user(
+    user_data: UserCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional)
+) -> UserResponse:
+    """
+    用户注册
+    
+    Args:
+        user_data: 用户注册数据
+        current_user: 当前用户（可选）
+        
+    Returns:
+        UserResponse: 注册的用户信息
+        
+    Raises:
+        HTTPException: 400 - 注册数据无效
+        HTTPException: 409 - 用户名或邮箱已存在
+        HTTPException: 500 - 注册失败
+    """
+```
+
+### 2. 用户登录
+```python
+@router.post("/login", response_model=LoginResponse)
+async def login_user(
+    login_data: LoginRequest,
+    request: Request
+) -> LoginResponse:
+    """
+    用户登录
+    
+    Args:
+        login_data: 登录数据
+        request: 请求对象
+        
+    Returns:
+        LoginResponse: 登录响应
+        
+    Raises:
+        HTTPException: 401 - 用户名或密码错误
+        HTTPException: 403 - 账户被禁用
+        HTTPException: 500 - 登录失败
+    """
+```
+
+### 3. 刷新令牌
+```python
+@router.post("/refresh", response_model=LoginResponse)
+async def refresh_token(
+    refresh_token: str = Form(...)
+) -> LoginResponse:
+    """
+    刷新访问令牌
+    
+    Args:
+        refresh_token: 刷新令牌
+        
+    Returns:
+        LoginResponse: 新的令牌信息
+        
+    Raises:
+        HTTPException: 401 - 刷新令牌无效
+        HTTPException: 500 - 刷新失败
+    """
+```
+
+### 4. 用户登出
+```python
+@router.post("/logout")
+async def logout_user(
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    用户登出
+    
+    Args:
+        current_user: 当前用户
+        
+    Returns:
+        dict: 登出结果
+    """
+```
+
+### 5. 获取用户信息
+```python
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+) -> UserResponse:
+    """
+    获取当前用户信息
+    
+    Args:
+        current_user: 当前用户
+        
+    Returns:
+        UserResponse: 用户信息
+    """
+```
+
+### 6. 更新用户信息
+```python
+@router.put("/me", response_model=UserResponse)
+async def update_current_user(
+    user_data: UserUpdate,
+    current_user: User = Depends(get_current_user)
+) -> UserResponse:
+    """
+    更新当前用户信息
+    
+    Args:
+        user_data: 更新数据
+        current_user: 当前用户
+        
+    Returns:
+        UserResponse: 更新后的用户信息
+    """
+```
+
+### 7. 权限检查
+```python
+@router.post("/check-permission")
+async def check_permission(
+    permission_check: PermissionCheck,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    检查用户权限
+    
+    Args:
+        permission_check: 权限检查数据
+        current_user: 当前用户
+        
+    Returns:
+        dict: 权限检查结果
+    """
+```
+
+## 核心服务类
+
+### 用户服务类
+```python
+import bcrypt
+import jwt
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+import secrets
+import uuid
+
+class UserService:
+    def __init__(self, db_session, redis_client, config):
+        self.db = db_session
+        self.redis = redis_client
+        self.config = config
+        self.role_permissions = self._load_role_permissions()
+    
+    async def create_user(self, user_data: UserCreate) -> UserResponse:
+        """创建用户"""
+        try:
+            # 验证密码
+            if user_data.password != user_data.confirm_password:
+                raise ValueError("密码和确认密码不匹配")
+            
+            # 检查用户名和邮箱是否已存在
+            existing_user = await self._get_user_by_username_or_email(
+                user_data.username, user_data.email
+            )
+            if existing_user:
+                raise ValueError("用户名或邮箱已存在")
+            
+            # 加密密码
+            hashed_password = self._hash_password(user_data.password)
+            
+            # 创建用户
+            user_id = str(uuid.uuid4())
+            user = UserInDB(
+                id=user_id,
+                username=user_data.username,
+                email=user_data.email,
+                full_name=user_data.full_name,
+                phone=user_data.phone,
+                role=user_data.role,
+                status=UserStatus.ACTIVE,
+                hashed_password=hashed_password,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+            # 保存到数据库
+            await self._save_user(user)
+            
+            return UserResponse(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                full_name=user.full_name,
+                phone=user.phone,
+                role=user.role,
+                status=user.status,
+                created_at=user.created_at,
+                updated_at=user.updated_at
+            )
+            
+        except Exception as e:
+            logger.error(f"创建用户失败: {str(e)}")
+            raise UserServiceError(f"创建用户失败: {str(e)}")
+    
+    async def authenticate_user(self, username: str, password: str) -> Optional[UserInDB]:
+        """验证用户"""
+        try:
+            # 获取用户
+            user = await self._get_user_by_username_or_email(username, username)
+            if not user:
+                return None
+            
+            # 验证密码
+            if not self._verify_password(password, user.hashed_password):
+                return None
+            
+            # 检查用户状态
+            if user.status != UserStatus.ACTIVE:
+                return None
+            
+            # 更新最后登录时间
+            await self._update_last_login(user.id)
+            
+            return user
+            
+        except Exception as e:
+            logger.error(f"验证用户失败: {str(e)}")
+            raise UserServiceError(f"验证用户失败: {str(e)}")
+    
+    async def create_tokens(self, user: UserInDB) -> Dict[str, Any]:
+        """创建访问令牌和刷新令牌"""
+        try:
+            # 创建访问令牌
+            access_token = self._create_access_token(user)
+            
+            # 创建刷新令牌
+            refresh_token = self._create_refresh_token(user)
+            
+            # 保存刷新令牌到Redis
+            await self._save_refresh_token(user.id, refresh_token)
+            
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": self.config.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            }
+            
+        except Exception as e:
+            logger.error(f"创建令牌失败: {str(e)}")
+            raise UserServiceError(f"创建令牌失败: {str(e)}")
+    
+    async def verify_token(self, token: str) -> Optional[TokenData]:
+        """验证令牌"""
+        try:
+            payload = jwt.decode(
+                token,
+                self.config.SECRET_KEY,
+                algorithms=[self.config.ALGORITHM]
+            )
+            
+            user_id = payload.get("sub")
+            if user_id is None:
+                return None
+            
+            # 检查令牌是否在黑名单中
+            if await self._is_token_blacklisted(token):
+                return None
+            
+            return TokenData(
+                user_id=user_id,
+                username=payload.get("username"),
+                role=UserRole(payload.get("role")),
+                exp=datetime.fromtimestamp(payload.get("exp"))
+            )
+            
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.JWTError:
+            return None
+        except Exception as e:
+            logger.error(f"验证令牌失败: {str(e)}")
+            return None
+    
+    async def refresh_access_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+        """刷新访问令牌"""
+        try:
+            # 验证刷新令牌
+            payload = jwt.decode(
+                refresh_token,
+                self.config.SECRET_KEY,
+                algorithms=[self.config.ALGORITHM]
+            )
+            
+            user_id = payload.get("sub")
+            if user_id is None:
+                return None
+            
+            # 检查刷新令牌是否有效
+            if not await self._is_refresh_token_valid(user_id, refresh_token):
+                return None
+            
+            # 获取用户信息
+            user = await self._get_user_by_id(user_id)
+            if not user or user.status != UserStatus.ACTIVE:
+                return None
+            
+            # 创建新的访问令牌
+            access_token = self._create_access_token(user)
+            
+            return {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "expires_in": self.config.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            }
+            
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.JWTError:
+            return None
+        except Exception as e:
+            logger.error(f"刷新令牌失败: {str(e)}")
+            return None
+    
+    async def check_permission(
+        self, 
+        user_id: str, 
+        permission: Permission, 
+        resource_id: Optional[str] = None
+    ) -> bool:
+        """检查用户权限"""
+        try:
+            # 获取用户信息
+            user = await self._get_user_by_id(user_id)
+            if not user or user.status != UserStatus.ACTIVE:
+                return False
+            
+            # 获取用户角色权限
+            user_permissions = self.role_permissions.get(user.role, [])
+            
+            # 检查权限
+            if permission in user_permissions:
+                return True
+            
+            # 检查资源级权限
+            if resource_id:
+                return await self._check_resource_permission(
+                    user_id, permission, resource_id
+                )
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"检查权限失败: {str(e)}")
+            return False
+    
+    async def logout_user(self, user_id: str, token: str):
+        """用户登出"""
+        try:
+            # 将令牌加入黑名单
+            await self._blacklist_token(token)
+            
+            # 删除所有刷新令牌
+            await self._delete_user_refresh_tokens(user_id)
+            
+            # 删除会话
+            await self._delete_user_sessions(user_id)
+            
+        except Exception as e:
+            logger.error(f"用户登出失败: {str(e)}")
+            raise UserServiceError(f"用户登出失败: {str(e)}")
+    
+    def _hash_password(self, password: str) -> str:
+        """加密密码"""
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
+    
+    def _verify_password(self, password: str, hashed_password: str) -> bool:
+        """验证密码"""
+        return bcrypt.checkpw(
+            password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
+    
+    def _create_access_token(self, user: UserInDB) -> str:
+        """创建访问令牌"""
+        expire = datetime.utcnow() + timedelta(
+            minutes=self.config.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+        
+        payload = {
+            "sub": user.id,
+            "username": user.username,
+            "role": user.role.value,
+            "exp": expire,
+            "iat": datetime.utcnow(),
+            "type": "access"
+        }
+        
+        return jwt.encode(
+            payload,
+            self.config.SECRET_KEY,
+            algorithm=self.config.ALGORITHM
+        )
+    
+    def _create_refresh_token(self, user: UserInDB) -> str:
+        """创建刷新令牌"""
+        expire = datetime.utcnow() + timedelta(
+            days=self.config.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        
+        payload = {
+            "sub": user.id,
+            "exp": expire,
+            "iat": datetime.utcnow(),
+            "type": "refresh"
+        }
+        
+        return jwt.encode(
+            payload,
+            self.config.SECRET_KEY,
+            algorithm=self.config.ALGORITHM
+        )
+    
+    def _load_role_permissions(self) -> Dict[UserRole, List[Permission]]:
+        """加载角色权限配置"""
+        return {
+            UserRole.ADMIN: [
+                Permission.CREATE_RESCUE_PLAN,
+                Permission.READ_RESCUE_PLAN,
+                Permission.UPDATE_RESCUE_PLAN,
+                Permission.DELETE_RESCUE_PLAN,
+                Permission.READ_KNOWLEDGE,
+                Permission.MANAGE_KNOWLEDGE,
+                Permission.MANAGE_USERS,
+                Permission.VIEW_USERS,
+                Permission.MANAGE_SYSTEM,
+                Permission.VIEW_LOGS,
+                Permission.MANAGE_CACHE
+            ],
+            UserRole.OPERATOR: [
+                Permission.CREATE_RESCUE_PLAN,
+                Permission.READ_RESCUE_PLAN,
+                Permission.UPDATE_RESCUE_PLAN,
+                Permission.DELETE_RESCUE_PLAN,
+                Permission.READ_KNOWLEDGE,
+                Permission.MANAGE_KNOWLEDGE,
+                Permission.VIEW_USERS
+            ],
+            UserRole.USER: [
+                Permission.CREATE_RESCUE_PLAN,
+                Permission.READ_RESCUE_PLAN,
+                Permission.UPDATE_RESCUE_PLAN,
+                Permission.DELETE_RESCUE_PLAN,
+                Permission.READ_KNOWLEDGE
+            ],
+            UserRole.GUEST: [
+                Permission.READ_RESCUE_PLAN,
+                Permission.READ_KNOWLEDGE
+            ]
+        }
+```
+
+## 依赖注入
+
+### 认证依赖
+```python
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer()
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> UserInDB:
+    """获取当前用户"""
+    token = credentials.credentials
+    
+    # 验证令牌
+    token_data = await user_service.verify_token(token)
+    if token_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的访问令牌",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 获取用户信息
+    user = await user_service.get_user_by_id(token_data.user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户不存在",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return user
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> Optional[UserInDB]:
+    """获取当前用户（可选）"""
+    if credentials is None:
+        return None
+    
+    try:
+        return await get_current_user(credentials)
+    except HTTPException:
+        return None
+
+def require_permission(permission: Permission):
+    """权限检查装饰器"""
+    def permission_checker(current_user: UserInDB = Depends(get_current_user)):
+        if not user_service.check_permission(current_user.id, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"权限不足: {permission.value}"
+            )
+        return current_user
+    return permission_checker
+```
+
+## 错误处理
+
+### 自定义异常类
+```python
+class UserServiceError(Exception):
+    """用户服务异常"""
+    pass
+
+class AuthenticationError(UserServiceError):
+    """认证异常"""
+    pass
+
+class AuthorizationError(UserServiceError):
+    """授权异常"""
+    pass
+
+class UserNotFoundError(UserServiceError):
+    """用户不存在异常"""
+    pass
+
+class UserAlreadyExistsError(UserServiceError):
+    """用户已存在异常"""
+    pass
+
+class InvalidTokenError(UserServiceError):
+    """无效令牌异常"""
+    pass
+```
+
+## 测试要求
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+
+class TestUserService:
+    @pytest.fixture
+    def mock_db_session(self):
+        return AsyncMock()
+    
+    @pytest.fixture
+    def mock_redis_client(self):
+        return AsyncMock()
+    
+    @pytest.fixture
+    def user_service(self, mock_db_session, mock_redis_client):
+        config = Mock()
+        config.SECRET_KEY = "test_secret"
+        config.ALGORITHM = "HS256"
+        config.ACCESS_TOKEN_EXPIRE_MINUTES = 30
+        config.REFRESH_TOKEN_EXPIRE_DAYS = 7
+        
+        return UserService(mock_db_session, mock_redis_client, config)
+    
+    @pytest.mark.asyncio
+    async def test_create_user(self, user_service):
+        user_data = UserCreate(
+            username="testuser",
+            email="test@example.com",
+            password="password123",
+            confirm_password="password123"
+        )
+        
+        with patch.object(user_service, '_get_user_by_username_or_email', return_value=None):
+            with patch.object(user_service, '_save_user'):
+                result = await user_service.create_user(user_data)
+                
+                assert result.username == "testuser"
+                assert result.email == "test@example.com"
+                assert result.role == UserRole.USER
+```
+
+## 部署配置
+
+### 环境变量
+```bash
+# JWT配置
+JWT_SECRET_KEY=your-secret-key-here
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# 数据库配置
+DATABASE_URL=postgresql://user:password@localhost:5432/fire_emergency
+
+# Redis配置
+REDIS_URL=redis://localhost:6379/0
+
+# 安全配置
+PASSWORD_MIN_LENGTH=8
+PASSWORD_REQUIRE_SPECIAL_CHARS=true
+ACCOUNT_LOCKOUT_ATTEMPTS=5
+ACCOUNT_LOCKOUT_DURATION=900
+```
+
+这个提示词文件提供了用户服务模块的完整开发指南，包括用户管理、认证授权、权限控制、会话管理等各个方面，确保开发人员能够顺利实现该模块。

@@ -1,0 +1,923 @@
+[
+  {
+    "id": "sample_001",
+    "name": "客厅木质家具火灾",
+    "description": "客厅内木质椅子、桌子起火，需要救援方案",
+    "items": [
+      {
+        "name": "椅子",
+        "material": "木质",
+        "quantity": 4,
+        "location": "客厅中央",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "桌子",
+        "material": "木质",
+        "quantity": 1,
+        "location": "客厅中央",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 3,
+      "ventilation": "一般",
+      "exits": 2,
+      "occupancy": 3,
+      "building_type": "住宅楼",
+      "fire_safety_equipment": ["干粉灭火器", "烟雾报警器"],
+      "special_conditions": "客厅空间较大，通风良好"
+    },
+    "additional_info": "火势刚起，烟雾较小，人员已疏散到安全区域",
+    "urgency_level": "中",
+    "expected_rescue_plan": "木质家具火灾救援"
+  },
+  {
+    "id": "sample_002",
+    "name": "厨房电器火灾",
+    "description": "厨房冰箱起火，需要紧急救援",
+    "items": [
+      {
+        "name": "冰箱",
+        "material": "金属",
+        "quantity": 1,
+        "location": "厨房角落",
+        "condition": "老化",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "燃气灶",
+        "material": "金属",
+        "quantity": 1,
+        "location": "厨房台面",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 2,
+      "ventilation": "较差",
+      "exits": 1,
+      "occupancy": 2,
+      "building_type": "住宅楼",
+      "fire_safety_equipment": ["二氧化碳灭火器"],
+      "special_conditions": "厨房空间狭小，有燃气管道"
+    },
+    "additional_info": "冰箱内部起火，可能涉及电器故障，已切断电源",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "电器火灾救援"
+  },
+  {
+    "id": "sample_003",
+    "name": "卧室布料火灾",
+    "description": "卧室沙发和窗帘起火，需要救援方案",
+    "items": [
+      {
+        "name": "沙发",
+        "material": "布料",
+        "quantity": 1,
+        "location": "卧室中央",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      },
+      {
+        "name": "窗帘",
+        "material": "布料",
+        "quantity": 2,
+        "location": "窗户",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 5,
+      "ventilation": "一般",
+      "exits": 1,
+      "occupancy": 1,
+      "building_type": "高层住宅",
+      "fire_safety_equipment": ["湿毛巾", "手电筒"],
+      "special_conditions": "高层建筑，疏散困难"
+    },
+    "additional_info": "布料燃烧产生大量烟雾，需要快速救援",
+    "urgency_level": "高",
+    "expected_rescue_plan": "布料火灾救援"
+  },
+  {
+    "id": "sample_004",
+    "name": "客厅塑料电器火灾",
+    "description": "客厅电视机起火，塑料外壳燃烧",
+    "items": [
+      {
+        "name": "电视机",
+        "material": "塑料",
+        "quantity": 1,
+        "location": "电视柜上",
+        "condition": "老化",
+        "flammability": "易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "电视柜",
+        "material": "木质",
+        "quantity": 1,
+        "location": "客厅",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 1,
+      "ventilation": "良好",
+      "exits": 3,
+      "occupancy": 4,
+      "building_type": "别墅",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具"],
+      "special_conditions": "别墅空间大，疏散相对容易"
+    },
+    "additional_info": "塑料燃烧产生有毒气体，需要佩戴防护设备",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "塑料火灾救援"
+  },
+  {
+    "id": "sample_005",
+    "name": "卧室泡沫床垫火灾",
+    "description": "卧室泡沫床垫起火，火势蔓延迅速",
+    "items": [
+      {
+        "name": "床垫",
+        "material": "泡沫",
+        "quantity": 1,
+        "location": "床上",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "枕头",
+        "material": "泡沫",
+        "quantity": 2,
+        "location": "床上",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 8,
+      "ventilation": "较差",
+      "exits": 1,
+      "occupancy": 2,
+      "building_type": "高层住宅",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具"],
+      "special_conditions": "高层建筑，泡沫燃烧极快"
+    },
+    "additional_info": "泡沫材料燃烧极快，产生大量有毒气体，救援难度极大",
+    "urgency_level": "极紧急",
+    "expected_rescue_plan": "泡沫材料火灾救援"
+  },
+  {
+    "id": "sample_006",
+    "name": "商业建筑混合材料火灾",
+    "description": "办公室内多种材料混合起火",
+    "items": [
+      {
+        "name": "办公桌",
+        "material": "木质",
+        "quantity": 10,
+        "location": "办公区",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "电脑",
+        "material": "塑料",
+        "quantity": 10,
+        "location": "办公桌上",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "文件柜",
+        "material": "金属",
+        "quantity": 5,
+        "location": "办公区",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "商业",
+      "floor": 15,
+      "ventilation": "良好",
+      "exits": 4,
+      "occupancy": 50,
+      "building_type": "写字楼",
+      "fire_safety_equipment": ["自动喷淋系统", "干粉灭火器", "防毒面具"],
+      "special_conditions": "人员密集，疏散复杂"
+    },
+    "additional_info": "商业建筑火灾，人员密集，需要快速疏散和救援",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "混合材料火灾救援"
+  },
+  {
+    "id": "sample_007",
+    "name": "工业厂房设备火灾",
+    "description": "工业厂房内设备起火，涉及多种材料",
+    "items": [
+      {
+        "name": "生产设备",
+        "material": "金属",
+        "quantity": 3,
+        "location": "生产车间",
+        "condition": "老化",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "塑料原料",
+        "material": "塑料",
+        "quantity": 100,
+        "location": "原料区",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "包装材料",
+        "material": "泡沫",
+        "quantity": 50,
+        "location": "包装区",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "工业",
+      "floor": 1,
+      "ventilation": "一般",
+      "exits": 6,
+      "occupancy": 20,
+      "building_type": "工业厂房",
+      "fire_safety_equipment": ["专业消防设备", "防毒面具", "防护服"],
+      "special_conditions": "工业环境，可能涉及危险化学品"
+    },
+    "additional_info": "工业厂房火灾，涉及大量可燃物，需要专业救援",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "工业厂房火灾救援"
+  },
+  {
+    "id": "sample_008",
+    "name": "室外广场临时设施火灾",
+    "description": "室外广场临时搭建的设施起火",
+    "items": [
+      {
+        "name": "临时帐篷",
+        "material": "布料",
+        "quantity": 5,
+        "location": "广场中央",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      },
+      {
+        "name": "音响设备",
+        "material": "塑料",
+        "quantity": 2,
+        "location": "舞台",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室外",
+      "area": "公共",
+      "floor": 0,
+      "ventilation": "极好",
+      "exits": 8,
+      "occupancy": 200,
+      "building_type": "开放空间",
+      "fire_safety_equipment": ["干粉灭火器", "水桶"],
+      "special_conditions": "室外环境，通风良好，疏散相对容易"
+    },
+    "additional_info": "室外火灾，通风良好，但人员较多需要有序疏散",
+    "urgency_level": "中",
+    "expected_rescue_plan": "室外火灾救援"
+  },
+  {
+    "id": "sample_009",
+    "name": "卧室床垫火灾",
+    "description": "卧室泡沫床垫起火，火势蔓延迅速",
+    "items": [
+      {
+        "name": "床垫",
+        "material": "泡沫",
+        "quantity": 1,
+        "location": "床上",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "枕头",
+        "material": "泡沫",
+        "quantity": 2,
+        "location": "床上",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 8,
+      "ventilation": "较差",
+      "exits": 1,
+      "occupancy": 2,
+      "building_type": "高层住宅",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具"],
+      "special_conditions": "高层建筑，泡沫燃烧极快"
+    },
+    "additional_info": "泡沫材料燃烧极快，产生大量有毒气体，救援难度极大",
+    "urgency_level": "极紧急",
+    "expected_rescue_plan": "泡沫材料火灾救援"
+  },
+  {
+    "id": "sample_010",
+    "name": "学校教室火灾",
+    "description": "学校教室课桌椅起火，需要快速疏散",
+    "items": [
+      {
+        "name": "课桌",
+        "material": "木质",
+        "quantity": 30,
+        "location": "教室",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "椅子",
+        "material": "木质",
+        "quantity": 30,
+        "location": "教室",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "黑板",
+        "material": "复合材料",
+        "quantity": 1,
+        "location": "教室前方",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "教育",
+      "floor": 3,
+      "ventilation": "一般",
+      "exits": 2,
+      "occupancy": 35,
+      "building_type": "学校",
+      "fire_safety_equipment": ["干粉灭火器", "湿毛巾", "手电筒"],
+      "special_conditions": "人员密集，疏散复杂"
+    },
+    "additional_info": "学校火灾，人员密集，需要快速有序疏散",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "学校火灾救援"
+  },
+  {
+    "id": "sample_011",
+    "name": "医院病房火灾",
+    "description": "医院病房内医疗设备起火，患者需要特殊救援",
+    "items": [
+      {
+        "name": "病床",
+        "material": "金属",
+        "quantity": 4,
+        "location": "病房",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "医疗设备",
+        "material": "塑料",
+        "quantity": 2,
+        "location": "病床边",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "氧气瓶",
+        "material": "金属",
+        "quantity": 1,
+        "location": "病房角落",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "医疗",
+      "floor": 5,
+      "ventilation": "良好",
+      "exits": 1,
+      "occupancy": 4,
+      "building_type": "医院",
+      "fire_safety_equipment": ["干粉灭火器", "担架", "呼吸器"],
+      "special_conditions": "患者行动不便，疏散困难"
+    },
+    "additional_info": "医院火灾，患者行动不便，需要特殊救援设备",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "医院火灾救援"
+  },
+  {
+    "id": "sample_012",
+    "name": "地下车库火灾",
+    "description": "地下车库内车辆起火，烟雾积聚严重",
+    "items": [
+      {
+        "name": "汽车",
+        "material": "金属",
+        "quantity": 1,
+        "location": "停车位",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "轮胎",
+        "material": "橡胶",
+        "quantity": 4,
+        "location": "汽车底部",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      },
+      {
+        "name": "汽油",
+        "material": "液体",
+        "quantity": 1,
+        "location": "油箱",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": -1,
+      "ventilation": "很差",
+      "exits": 2,
+      "occupancy": 1,
+      "building_type": "地下车库",
+      "fire_safety_equipment": ["干粉灭火器", "呼吸器", "强光手电"],
+      "special_conditions": "地下空间，通风差，烟雾积聚"
+    },
+    "additional_info": "地下车库火灾，烟雾积聚严重，救援难度大",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "地下车库火灾救援"
+  },
+  {
+    "id": "sample_013",
+    "name": "厨房燃气火灾",
+    "description": "厨房燃气灶起火，涉及燃气和油类",
+    "items": [
+      {
+        "name": "燃气灶",
+        "material": "金属",
+        "quantity": 1,
+        "location": "厨房台面",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "食用油",
+        "material": "液体",
+        "quantity": 1,
+        "location": "灶台上",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "抽油烟机",
+        "material": "金属",
+        "quantity": 1,
+        "location": "灶台上方",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 1,
+      "ventilation": "一般",
+      "exits": 1,
+      "occupancy": 1,
+      "building_type": "住宅",
+      "fire_safety_equipment": ["干粉灭火器", "湿毛巾", "锅盖"],
+      "special_conditions": "涉及燃气和油类，救援时务必小心"
+    },
+    "additional_info": "厨房火灾涉及燃气和油类，救援时务必小心，避免爆炸",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "厨房火灾救援"
+  },
+  {
+    "id": "sample_014",
+    "name": "图书馆火灾",
+    "description": "图书馆内大量纸质材料起火，火势蔓延极快",
+    "items": [
+      {
+        "name": "书籍",
+        "material": "纸质",
+        "quantity": 1000,
+        "location": "书架",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "书架",
+        "material": "木质",
+        "quantity": 20,
+        "location": "图书馆",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "电脑",
+        "material": "塑料",
+        "quantity": 10,
+        "location": "阅览桌",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "教育",
+      "floor": 2,
+      "ventilation": "一般",
+      "exits": 4,
+      "occupancy": 50,
+      "building_type": "图书馆",
+      "fire_safety_equipment": ["干粉灭火器", "呼吸器", "强光手电"],
+      "special_conditions": "纸质材料多，火势蔓延极快"
+    },
+    "additional_info": "图书馆火灾涉及大量纸质材料，火势蔓延极快，需要快速响应",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "图书馆火灾救援"
+  },
+  {
+    "id": "sample_015",
+    "name": "橡胶制品火灾",
+    "description": "橡胶轮胎起火，产生有毒气体",
+    "items": [
+      {
+        "name": "轮胎",
+        "material": "橡胶",
+        "quantity": 4,
+        "location": "车库",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      },
+      {
+        "name": "橡胶管",
+        "material": "橡胶",
+        "quantity": 2,
+        "location": "车库",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 0,
+      "ventilation": "较差",
+      "exits": 1,
+      "occupancy": 1,
+      "building_type": "车库",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具"],
+      "special_conditions": "橡胶燃烧产生有毒气体"
+    },
+    "additional_info": "橡胶制品燃烧产生有毒气体，救援人员应佩戴防毒面具",
+    "urgency_level": "中",
+    "expected_rescue_plan": "橡胶制品火灾救援"
+  },
+  {
+    "id": "sample_016",
+    "name": "玻璃制品火灾",
+    "description": "玻璃制品起火，注意玻璃碎片",
+    "items": [
+      {
+        "name": "玻璃窗",
+        "material": "玻璃",
+        "quantity": 4,
+        "location": "窗户",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "玻璃桌",
+        "material": "玻璃",
+        "quantity": 1,
+        "location": "客厅",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 2,
+      "ventilation": "良好",
+      "exits": 2,
+      "occupancy": 2,
+      "building_type": "住宅",
+      "fire_safety_equipment": ["干粉灭火器", "防护手套"],
+      "special_conditions": "玻璃高温下可能破裂"
+    },
+    "additional_info": "玻璃制品不燃但高温下可能破裂，救援时注意玻璃碎片",
+    "urgency_level": "低",
+    "expected_rescue_plan": "玻璃制品火灾救援"
+  },
+  {
+    "id": "sample_017",
+    "name": "实验室化学品火灾",
+    "description": "实验室化学品起火，涉及多种危险化学品",
+    "items": [
+      {
+        "name": "化学试剂",
+        "material": "液体",
+        "quantity": 10,
+        "location": "实验台",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "实验设备",
+        "material": "金属",
+        "quantity": 5,
+        "location": "实验台",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "科研",
+      "floor": 2,
+      "ventilation": "良好",
+      "exits": 2,
+      "occupancy": 3,
+      "building_type": "实验室",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具", "防护服"],
+      "special_conditions": "化学品多，爆炸风险高"
+    },
+    "additional_info": "实验室火灾涉及多种化学品，可能发生化学反应，爆炸风险极高",
+    "urgency_level": "极紧急",
+    "expected_rescue_plan": "实验室火灾救援"
+  },
+  {
+    "id": "sample_018",
+    "name": "化工厂火灾",
+    "description": "化工厂反应釜起火，涉及多种危险化学品",
+    "items": [
+      {
+        "name": "反应釜",
+        "material": "金属",
+        "quantity": 1,
+        "location": "生产车间",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "化学原料",
+        "material": "液体",
+        "quantity": 100,
+        "location": "原料区",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "工业",
+      "floor": 1,
+      "ventilation": "一般",
+      "exits": 4,
+      "occupancy": 15,
+      "building_type": "化工厂",
+      "fire_safety_equipment": ["专业设备", "防护服", "呼吸器"],
+      "special_conditions": "危险化学品多，爆炸风险极高"
+    },
+    "additional_info": "化工厂火灾涉及多种危险化学品，爆炸风险极高，需要专业救援",
+    "urgency_level": "极紧急",
+    "expected_rescue_plan": "化工厂火灾救援"
+  },
+  {
+    "id": "sample_019",
+    "name": "加油站火灾",
+    "description": "加油站油泵起火，涉及易燃液体",
+    "items": [
+      {
+        "name": "油泵",
+        "material": "金属",
+        "quantity": 4,
+        "location": "加油区",
+        "condition": "良好",
+        "flammability": "不燃",
+        "toxicity": "低"
+      },
+      {
+        "name": "汽油",
+        "material": "液体",
+        "quantity": 1000,
+        "location": "地下储罐",
+        "condition": "良好",
+        "flammability": "极易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室外",
+      "area": "商业",
+      "floor": 0,
+      "ventilation": "极好",
+      "exits": 6,
+      "occupancy": 20,
+      "building_type": "加油站",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具", "防护服"],
+      "special_conditions": "易燃液体多，爆炸风险极高"
+    },
+    "additional_info": "加油站火灾爆炸风险极高，需要专业救援队伍",
+    "urgency_level": "极紧急",
+    "expected_rescue_plan": "加油站火灾救援"
+  },
+  {
+    "id": "sample_020",
+    "name": "机场火灾",
+    "description": "机场候机厅起火，人员密集需要疏散",
+    "items": [
+      {
+        "name": "座椅",
+        "material": "塑料",
+        "quantity": 200,
+        "location": "候机厅",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "行李",
+        "material": "复合材料",
+        "quantity": 500,
+        "location": "候机厅",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "交通",
+      "floor": 2,
+      "ventilation": "良好",
+      "exits": 8,
+      "occupancy": 1000,
+      "building_type": "机场",
+      "fire_safety_equipment": ["干粉灭火器", "湿毛巾", "手电筒"],
+      "special_conditions": "人员密集，疏散复杂"
+    },
+    "additional_info": "机场火灾人员密集，疏散复杂，需要有序组织",
+    "urgency_level": "紧急",
+    "expected_rescue_plan": "机场火灾救援"
+  },
+  {
+    "id": "sample_021",
+    "name": "地铁站火灾",
+    "description": "地铁站内起火，地下空间疏散困难",
+    "items": [
+      {
+        "name": "座椅",
+        "material": "塑料",
+        "quantity": 50,
+        "location": "站台",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      },
+      {
+        "name": "广告牌",
+        "material": "复合材料",
+        "quantity": 20,
+        "location": "站台",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "高"
+      }
+    ],
+    "environment": {
+      "type": "地下",
+      "area": "交通",
+      "floor": -1,
+      "ventilation": "一般",
+      "exits": 4,
+      "occupancy": 200,
+      "building_type": "地铁站",
+      "fire_safety_equipment": ["干粉灭火器", "呼吸器", "强光手电"],
+      "special_conditions": "地下空间，疏散困难"
+    },
+    "additional_info": "地铁站火灾疏散困难，需要专业救援设备",
+    "urgency_level": "极紧急",
+    "expected_rescue_plan": "地铁站火灾救援"
+  },
+  {
+    "id": "sample_022",
+    "name": "纤维地毯火灾",
+    "description": "纤维地毯起火，产生有毒气体",
+    "items": [
+      {
+        "name": "地毯",
+        "material": "纤维",
+        "quantity": 1,
+        "location": "客厅",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      },
+      {
+        "name": "窗帘",
+        "material": "纤维",
+        "quantity": 2,
+        "location": "窗户",
+        "condition": "良好",
+        "flammability": "易燃",
+        "toxicity": "中"
+      }
+    ],
+    "environment": {
+      "type": "室内",
+      "area": "住宅",
+      "floor": 1,
+      "ventilation": "一般",
+      "exits": 2,
+      "occupancy": 3,
+      "building_type": "住宅",
+      "fire_safety_equipment": ["干粉灭火器", "防毒面具"],
+      "special_conditions": "纤维燃烧产生有毒气体"
+    },
+    "additional_info": "纤维材料燃烧产生有毒气体，救援人员应佩戴防毒面具",
+    "urgency_level": "中",
+    "expected_rescue_plan": "纤维材料火灾救援"
+  }
+]

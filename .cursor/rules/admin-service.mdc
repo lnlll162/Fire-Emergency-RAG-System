@@ -1,0 +1,809 @@
+---
+alwaysApply: false
+---
+# 管理服务模块 - 开发提示词
+
+## 模块概述
+管理服务模块负责系统管理和维护功能，提供知识库数据管理、用户管理、系统监控、日志查看、配置管理等功能，确保系统稳定运行和高效管理。
+
+## 技术栈
+- **后端框架**: FastAPI + SQLAlchemy
+- **数据库**: PostgreSQL + Redis
+- **监控**: Prometheus + Grafana
+- **日志**: ELK Stack (Elasticsearch + Logstash + Kibana)
+- **任务队列**: Celery + Redis
+- **文件存储**: MinIO
+
+## 核心职责
+1. 知识库数据管理和维护
+2. 用户管理和权限控制
+3. 系统监控和性能分析
+4. 日志查看和分析
+5. 配置管理和系统设置
+6. 数据备份和恢复
+
+## 数据模型定义
+
+### 系统配置模型
+```python
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+from enum import Enum
+
+class ConfigCategory(str, Enum):
+    """配置分类枚举"""
+    SYSTEM = "system"
+    DATABASE = "database"
+    CACHE = "cache"
+    MONITORING = "monitoring"
+    SECURITY = "security"
+    NOTIFICATION = "notification"
+
+class SystemConfig(BaseModel):
+    """系统配置模型"""
+    id: str = Field(..., description="配置ID")
+    key: str = Field(..., description="配置键")
+    value: Any = Field(..., description="配置值")
+    category: ConfigCategory = Field(..., description="配置分类")
+    description: str = Field(..., description="配置描述")
+    is_encrypted: bool = Field(default=False, description="是否加密")
+    is_readonly: bool = Field(default=False, description="是否只读")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    updated_by: str = Field(..., description="更新者")
+
+class ConfigUpdate(BaseModel):
+    """配置更新模型"""
+    value: Any = Field(..., description="新值")
+    reason: str = Field(..., description="更新原因")
+    notify_users: bool = Field(default=False, description="是否通知用户")
+```
+
+### 监控数据模型
+```python
+class MetricType(str, Enum):
+    """指标类型枚举"""
+    COUNTER = "counter"
+    GAUGE = "gauge"
+    HISTOGRAM = "histogram"
+    SUMMARY = "summary"
+
+class SystemMetric(BaseModel):
+    """系统指标模型"""
+    name: str = Field(..., description="指标名称")
+    type: MetricType = Field(..., description="指标类型")
+    value: float = Field(..., description="指标值")
+    labels: Dict[str, str] = Field(default_factory=dict, description="标签")
+    timestamp: datetime = Field(..., description="时间戳")
+    unit: Optional[str] = Field(None, description="单位")
+
+class AlertRule(BaseModel):
+    """告警规则模型"""
+    id: str = Field(..., description="规则ID")
+    name: str = Field(..., description="规则名称")
+    metric_name: str = Field(..., description="指标名称")
+    condition: str = Field(..., description="告警条件")
+    threshold: float = Field(..., description="阈值")
+    severity: str = Field(..., description="严重程度")
+    is_enabled: bool = Field(default=True, description="是否启用")
+    created_at: datetime = Field(..., description="创建时间")
+
+class Alert(BaseModel):
+    """告警模型"""
+    id: str = Field(..., description="告警ID")
+    rule_id: str = Field(..., description="规则ID")
+    message: str = Field(..., description="告警消息")
+    severity: str = Field(..., description="严重程度")
+    status: str = Field(..., description="告警状态")
+    triggered_at: datetime = Field(..., description="触发时间")
+    resolved_at: Optional[datetime] = Field(None, description="解决时间")
+    acknowledged_by: Optional[str] = Field(None, description="确认者")
+```
+
+### 日志模型
+```python
+class LogLevel(str, Enum):
+    """日志级别枚举"""
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+class LogEntry(BaseModel):
+    """日志条目模型"""
+    id: str = Field(..., description="日志ID")
+    timestamp: datetime = Field(..., description="时间戳")
+    level: LogLevel = Field(..., description="日志级别")
+    logger: str = Field(..., description="记录器")
+    message: str = Field(..., description="日志消息")
+    module: str = Field(..., description="模块")
+    function: str = Field(..., description="函数")
+    line_number: int = Field(..., description="行号")
+    thread_id: str = Field(..., description="线程ID")
+    process_id: int = Field(..., description="进程ID")
+    extra: Dict[str, Any] = Field(default_factory=dict, description="额外信息")
+
+class LogQuery(BaseModel):
+    """日志查询模型"""
+    start_time: Optional[datetime] = Field(None, description="开始时间")
+    end_time: Optional[datetime] = Field(None, description="结束时间")
+    level: Optional[LogLevel] = Field(None, description="日志级别")
+    logger: Optional[str] = Field(None, description="记录器")
+    module: Optional[str] = Field(None, description="模块")
+    message_contains: Optional[str] = Field(None, description="消息包含")
+    limit: int = Field(default=100, description="限制数量")
+    offset: int = Field(default=0, description="偏移量")
+```
+
+### 数据管理模型
+```python
+class DataBackup(BaseModel):
+    """数据备份模型"""
+    id: str = Field(..., description="备份ID")
+    name: str = Field(..., description="备份名称")
+    type: str = Field(..., description="备份类型")
+    size: int = Field(..., description="备份大小(字节)")
+    status: str = Field(..., description="备份状态")
+    created_at: datetime = Field(..., description="创建时间")
+    expires_at: Optional[datetime] = Field(None, description="过期时间")
+    file_path: str = Field(..., description="文件路径")
+    checksum: str = Field(..., description="校验和")
+
+class DataRestore(BaseModel):
+    """数据恢复模型"""
+    backup_id: str = Field(..., description="备份ID")
+    target_database: str = Field(..., description="目标数据库")
+    restore_mode: str = Field(..., description="恢复模式")
+    confirm: bool = Field(..., description="确认恢复")
+
+class KnowledgeBaseStats(BaseModel):
+    """知识库统计模型"""
+    total_documents: int = Field(..., description="总文档数")
+    total_nodes: int = Field(..., description="总节点数")
+    total_relationships: int = Field(..., description="总关系数")
+    last_updated: datetime = Field(..., description="最后更新时间")
+    storage_size: int = Field(..., description="存储大小(字节)")
+    categories: Dict[str, int] = Field(..., description="分类统计")
+```
+
+## API接口规范
+
+### 1. 系统配置管理
+```python
+@router.get("/config", response_model=List[SystemConfig])
+async def get_system_configs(
+    category: Optional[ConfigCategory] = None,
+    current_user: User = Depends(require_permission(Permission.MANAGE_SYSTEM))
+) -> List[SystemConfig]:
+    """
+    获取系统配置
+    
+    Args:
+        category: 配置分类（可选）
+        current_user: 当前用户
+        
+    Returns:
+        List[SystemConfig]: 系统配置列表
+    """
+```
+
+### 2. 更新系统配置
+```python
+@router.put("/config/{config_id}", response_model=SystemConfig)
+async def update_system_config(
+    config_id: str,
+    config_update: ConfigUpdate,
+    current_user: User = Depends(require_permission(Permission.MANAGE_SYSTEM))
+) -> SystemConfig:
+    """
+    更新系统配置
+    
+    Args:
+        config_id: 配置ID
+        config_update: 配置更新数据
+        current_user: 当前用户
+        
+    Returns:
+        SystemConfig: 更新后的配置
+    """
+```
+
+### 3. 获取系统指标
+```python
+@router.get("/metrics", response_model=List[SystemMetric])
+async def get_system_metrics(
+    metric_name: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    current_user: User = Depends(require_permission(Permission.VIEW_LOGS))
+) -> List[SystemMetric]:
+    """
+    获取系统指标
+    
+    Args:
+        metric_name: 指标名称（可选）
+        start_time: 开始时间（可选）
+        end_time: 结束时间（可选）
+        current_user: 当前用户
+        
+    Returns:
+        List[SystemMetric]: 系统指标列表
+    """
+```
+
+### 4. 获取告警列表
+```python
+@router.get("/alerts", response_model=List[Alert])
+async def get_alerts(
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(require_permission(Permission.VIEW_LOGS))
+) -> List[Alert]:
+    """
+    获取告警列表
+    
+    Args:
+        status: 告警状态（可选）
+        severity: 严重程度（可选）
+        limit: 限制数量
+        offset: 偏移量
+        current_user: 当前用户
+        
+    Returns:
+        List[Alert]: 告警列表
+    """
+```
+
+### 5. 查询日志
+```python
+@router.post("/logs/query", response_model=List[LogEntry])
+async def query_logs(
+    query: LogQuery,
+    current_user: User = Depends(require_permission(Permission.VIEW_LOGS))
+) -> List[LogEntry]:
+    """
+    查询日志
+    
+    Args:
+        query: 日志查询条件
+        current_user: 当前用户
+        
+    Returns:
+        List[LogEntry]: 日志条目列表
+    """
+```
+
+### 6. 获取知识库统计
+```python
+@router.get("/knowledge-base/stats", response_model=KnowledgeBaseStats)
+async def get_knowledge_base_stats(
+    current_user: User = Depends(require_permission(Permission.MANAGE_KNOWLEDGE))
+) -> KnowledgeBaseStats:
+    """
+    获取知识库统计信息
+    
+    Args:
+        current_user: 当前用户
+        
+    Returns:
+        KnowledgeBaseStats: 知识库统计信息
+    """
+```
+
+### 7. 创建数据备份
+```python
+@router.post("/backup", response_model=DataBackup)
+async def create_backup(
+    backup_name: str,
+    backup_type: str = "full",
+    current_user: User = Depends(require_permission(Permission.MANAGE_SYSTEM))
+) -> DataBackup:
+    """
+    创建数据备份
+    
+    Args:
+        backup_name: 备份名称
+        backup_type: 备份类型
+        current_user: 当前用户
+        
+    Returns:
+        DataBackup: 备份信息
+    """
+```
+
+## 核心服务类
+
+### 管理服务类
+```python
+import asyncio
+import json
+import shutil
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
+import psutil
+import requests
+from prometheus_client import CollectorRegistry, generate_latest
+
+class AdminService:
+    def __init__(self, db_session, redis_client, config):
+        self.db = db_session
+        self.redis = redis_client
+        self.config = config
+        self.monitor = SystemMonitor()
+        self.backup_manager = BackupManager()
+        self.log_manager = LogManager()
+    
+    async def get_system_configs(
+        self, 
+        category: Optional[ConfigCategory] = None
+    ) -> List[SystemConfig]:
+        """获取系统配置"""
+        try:
+            query = self.db.query(SystemConfig)
+            if category:
+                query = query.filter(SystemConfig.category == category)
+            
+            configs = await query.all()
+            return configs
+            
+        except Exception as e:
+            logger.error(f"获取系统配置失败: {str(e)}")
+            raise AdminServiceError(f"获取系统配置失败: {str(e)}")
+    
+    async def update_system_config(
+        self, 
+        config_id: str, 
+        config_update: ConfigUpdate,
+        updated_by: str
+    ) -> SystemConfig:
+        """更新系统配置"""
+        try:
+            config = await self.db.query(SystemConfig).filter(
+                SystemConfig.id == config_id
+            ).first()
+            
+            if not config:
+                raise ValueError("配置不存在")
+            
+            if config.is_readonly:
+                raise ValueError("配置为只读，无法修改")
+            
+            # 更新配置值
+            config.value = config_update.value
+            config.updated_at = datetime.utcnow()
+            config.updated_by = updated_by
+            
+            # 保存到数据库
+            await self.db.commit()
+            
+            # 记录配置变更日志
+            await self.log_manager.log_config_change(
+                config_id, config_update.value, config_update.reason, updated_by
+            )
+            
+            # 通知相关服务配置变更
+            if config_update.notify_users:
+                await self._notify_config_change(config)
+            
+            return config
+            
+        except Exception as e:
+            logger.error(f"更新系统配置失败: {str(e)}")
+            raise AdminServiceError(f"更新系统配置失败: {str(e)}")
+    
+    async def get_system_metrics(
+        self,
+        metric_name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> List[SystemMetric]:
+        """获取系统指标"""
+        try:
+            metrics = await self.monitor.get_metrics(
+                metric_name, start_time, end_time
+            )
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"获取系统指标失败: {str(e)}")
+            raise AdminServiceError(f"获取系统指标失败: {str(e)}")
+    
+    async def get_system_health(self) -> Dict[str, Any]:
+        """获取系统健康状态"""
+        try:
+            health_status = {
+                "overall": "healthy",
+                "timestamp": datetime.utcnow(),
+                "services": {}
+            }
+            
+            # 检查数据库连接
+            db_status = await self._check_database_health()
+            health_status["services"]["database"] = db_status
+            
+            # 检查Redis连接
+            redis_status = await self._check_redis_health()
+            health_status["services"]["redis"] = redis_status
+            
+            # 检查Neo4j连接
+            neo4j_status = await self._check_neo4j_health()
+            health_status["services"]["neo4j"] = neo4j_status
+            
+            # 检查ChromaDB连接
+            chroma_status = await self._check_chromadb_health()
+            health_status["services"]["chromadb"] = chroma_status
+            
+            # 检查Ollama服务
+            ollama_status = await self._check_ollama_health()
+            health_status["services"]["ollama"] = ollama_status
+            
+            # 检查系统资源
+            system_resources = self._get_system_resources()
+            health_status["resources"] = system_resources
+            
+            # 确定整体健康状态
+            unhealthy_services = [
+                name for name, status in health_status["services"].items()
+                if status["status"] != "healthy"
+            ]
+            
+            if unhealthy_services:
+                health_status["overall"] = "unhealthy"
+                health_status["unhealthy_services"] = unhealthy_services
+            
+            return health_status
+            
+        except Exception as e:
+            logger.error(f"获取系统健康状态失败: {str(e)}")
+            raise AdminServiceError(f"获取系统健康状态失败: {str(e)}")
+    
+    async def get_knowledge_base_stats(self) -> KnowledgeBaseStats:
+        """获取知识库统计信息"""
+        try:
+            # 获取Neo4j统计
+            neo4j_stats = await self._get_neo4j_stats()
+            
+            # 获取ChromaDB统计
+            chroma_stats = await self._get_chromadb_stats()
+            
+            # 获取文档统计
+            doc_stats = await self._get_document_stats()
+            
+            return KnowledgeBaseStats(
+                total_documents=doc_stats["total_documents"],
+                total_nodes=neo4j_stats["total_nodes"],
+                total_relationships=neo4j_stats["total_relationships"],
+                last_updated=doc_stats["last_updated"],
+                storage_size=neo4j_stats["storage_size"] + chroma_stats["storage_size"],
+                categories=doc_stats["categories"]
+            )
+            
+        except Exception as e:
+            logger.error(f"获取知识库统计失败: {str(e)}")
+            raise AdminServiceError(f"获取知识库统计失败: {str(e)}")
+    
+    async def create_backup(
+        self, 
+        backup_name: str, 
+        backup_type: str = "full"
+    ) -> DataBackup:
+        """创建数据备份"""
+        try:
+            backup_id = str(uuid.uuid4())
+            backup_path = f"backups/{backup_id}"
+            
+            # 创建备份目录
+            os.makedirs(backup_path, exist_ok=True)
+            
+            # 备份PostgreSQL
+            await self._backup_postgresql(backup_path)
+            
+            # 备份Neo4j
+            await self._backup_neo4j(backup_path)
+            
+            # 备份ChromaDB
+            await self._backup_chromadb(backup_path)
+            
+            # 备份Redis
+            await self._backup_redis(backup_path)
+            
+            # 计算备份大小和校验和
+            backup_size = self._calculate_directory_size(backup_path)
+            checksum = self._calculate_checksum(backup_path)
+            
+            # 创建备份记录
+            backup = DataBackup(
+                id=backup_id,
+                name=backup_name,
+                type=backup_type,
+                size=backup_size,
+                status="completed",
+                created_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(days=30),
+                file_path=backup_path,
+                checksum=checksum
+            )
+            
+            # 保存到数据库
+            await self.db.add(backup)
+            await self.db.commit()
+            
+            return backup
+            
+        except Exception as e:
+            logger.error(f"创建备份失败: {str(e)}")
+            raise AdminServiceError(f"创建备份失败: {str(e)}")
+    
+    async def restore_backup(
+        self, 
+        backup_id: str, 
+        target_database: str,
+        restore_mode: str = "full"
+    ) -> bool:
+        """恢复数据备份"""
+        try:
+            # 获取备份信息
+            backup = await self.db.query(DataBackup).filter(
+                DataBackup.id == backup_id
+            ).first()
+            
+            if not backup:
+                raise ValueError("备份不存在")
+            
+            if backup.status != "completed":
+                raise ValueError("备份未完成，无法恢复")
+            
+            # 停止相关服务
+            await self._stop_services()
+            
+            # 恢复PostgreSQL
+            if target_database in ["postgresql", "all"]:
+                await self._restore_postgresql(backup.file_path)
+            
+            # 恢复Neo4j
+            if target_database in ["neo4j", "all"]:
+                await self._restore_neo4j(backup.file_path)
+            
+            # 恢复ChromaDB
+            if target_database in ["chromadb", "all"]:
+                await self._restore_chromadb(backup.file_path)
+            
+            # 恢复Redis
+            if target_database in ["redis", "all"]:
+                await self._restore_redis(backup.file_path)
+            
+            # 启动相关服务
+            await self._start_services()
+            
+            # 记录恢复日志
+            await self.log_manager.log_backup_restore(
+                backup_id, target_database, restore_mode
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"恢复备份失败: {str(e)}")
+            raise AdminServiceError(f"恢复备份失败: {str(e)}")
+    
+    def _get_system_resources(self) -> Dict[str, Any]:
+        """获取系统资源使用情况"""
+        try:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            return {
+                "cpu_percent": cpu_percent,
+                "memory": {
+                    "total": memory.total,
+                    "available": memory.available,
+                    "percent": memory.percent,
+                    "used": memory.used
+                },
+                "disk": {
+                    "total": disk.total,
+                    "used": disk.used,
+                    "free": disk.free,
+                    "percent": (disk.used / disk.total) * 100
+                }
+            }
+        except Exception as e:
+            logger.error(f"获取系统资源失败: {str(e)}")
+            return {}
+```
+
+## 监控服务
+
+### 系统监控器
+```python
+class SystemMonitor:
+    def __init__(self):
+        self.registry = CollectorRegistry()
+        self.metrics_collector = MetricsCollector()
+    
+    async def get_metrics(
+        self,
+        metric_name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> List[SystemMetric]:
+        """获取系统指标"""
+        try:
+            # 从Prometheus获取指标
+            metrics_data = generate_latest(self.registry)
+            
+            # 解析指标数据
+            metrics = self._parse_metrics(metrics_data)
+            
+            # 过滤指标
+            if metric_name:
+                metrics = [m for m in metrics if m.name == metric_name]
+            
+            # 时间过滤
+            if start_time or end_time:
+                metrics = self._filter_by_time(metrics, start_time, end_time)
+            
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"获取指标失败: {str(e)}")
+            return []
+    
+    def _parse_metrics(self, metrics_data: bytes) -> List[SystemMetric]:
+        """解析指标数据"""
+        metrics = []
+        lines = metrics_data.decode('utf-8').split('\n')
+        
+        for line in lines:
+            if line.startswith('#') or not line.strip():
+                continue
+            
+            parts = line.split(' ')
+            if len(parts) >= 2:
+                name = parts[0].split('{')[0]
+                value = float(parts[1])
+                
+                # 解析标签
+                labels = {}
+                if '{' in parts[0] and '}' in parts[0]:
+                    label_str = parts[0].split('{')[1].split('}')[0]
+                    for label_pair in label_str.split(','):
+                        if '=' in label_pair:
+                            key, val = label_pair.split('=', 1)
+                            labels[key.strip()] = val.strip('"')
+                
+                metric = SystemMetric(
+                    name=name,
+                    type=MetricType.GAUGE,  # 简化处理
+                    value=value,
+                    labels=labels,
+                    timestamp=datetime.utcnow()
+                )
+                metrics.append(metric)
+        
+        return metrics
+```
+
+## 错误处理
+
+### 自定义异常类
+```python
+class AdminServiceError(Exception):
+    """管理服务异常"""
+    pass
+
+class ConfigurationError(AdminServiceError):
+    """配置错误异常"""
+    pass
+
+class MonitoringError(AdminServiceError):
+    """监控错误异常"""
+    pass
+
+class BackupError(AdminServiceError):
+    """备份错误异常"""
+    pass
+
+class RestoreError(AdminServiceError):
+    """恢复错误异常"""
+    pass
+```
+
+## 测试要求
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+
+class TestAdminService:
+    @pytest.fixture
+    def mock_db_session(self):
+        return AsyncMock()
+    
+    @pytest.fixture
+    def mock_redis_client(self):
+        return AsyncMock()
+    
+    @pytest.fixture
+    def admin_service(self, mock_db_session, mock_redis_client):
+        config = Mock()
+        return AdminService(mock_db_session, mock_redis_client, config)
+    
+    @pytest.mark.asyncio
+    async def test_get_system_configs(self, admin_service, mock_db_session):
+        mock_config = SystemConfig(
+            id="test_id",
+            key="test_key",
+            value="test_value",
+            category=ConfigCategory.SYSTEM,
+            description="Test config",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            updated_by="admin"
+        )
+        
+        mock_db_session.query.return_value.filter.return_value.all.return_value = [mock_config]
+        
+        result = await admin_service.get_system_configs()
+        
+        assert len(result) == 1
+        assert result[0].key == "test_key"
+    
+    @pytest.mark.asyncio
+    async def test_update_system_config(self, admin_service, mock_db_session):
+        config_update = ConfigUpdate(
+            value="new_value",
+            reason="Test update"
+        )
+        
+        mock_config = SystemConfig(
+            id="test_id",
+            key="test_key",
+            value="old_value",
+            category=ConfigCategory.SYSTEM,
+            description="Test config",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            updated_by="admin"
+        )
+        
+        mock_db_session.query.return_value.filter.return_value.first.return_value = mock_config
+        
+        result = await admin_service.update_system_config("test_id", config_update, "admin")
+        
+        assert result.value == "new_value"
+        mock_db_session.commit.assert_called_once()
+```
+
+## 部署配置
+
+### 环境变量
+```bash
+# 管理服务配置
+ADMIN_SERVICE_HOST=0.0.0.0
+ADMIN_SERVICE_PORT=8005
+ADMIN_SERVICE_DEBUG=false
+
+# 监控配置
+PROMETHEUS_ENDPOINT=http://localhost:9090
+GRAFANA_ENDPOINT=http://localhost:3000
+ELASTICSEARCH_ENDPOINT=http://localhost:9200
+
+# 备份配置
+BACKUP_STORAGE_PATH=/data/backups
+BACKUP_RETENTION_DAYS=30
+BACKUP_COMPRESSION=true
+
+# 告警配置
+ALERT_EMAIL_ENABLED=true
+ALERT_SLACK_ENABLED=false
+ALERT_WEBHOOK_URL=
+```
+
+这个提示词文件提供了管理服务模块的完整开发指南，包括系统配置、监控管理、日志分析、数据备份等各个方面，确保开发人员能够顺利实现该模块。

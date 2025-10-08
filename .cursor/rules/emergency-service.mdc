@@ -1,0 +1,417 @@
+---
+alwaysApply: false
+---
+# 应急服务模块 - 开发提示词
+
+## 模块概述
+应急服务模块是整个系统的核心协调者，负责接收用户输入，协调调用其他服务，生成最终救援方案。
+
+## 技术栈
+- **框架**: FastAPI 0.104+
+- **异步处理**: asyncio + httpx
+- **数据验证**: Pydantic 2.5+
+- **日志**: Loguru
+- **错误处理**: 自定义异常类
+
+## 核心职责
+1. 接收用户输入的物品和环境信息
+2. 验证和标准化输入数据
+3. 协调调用知识图谱、RAG、Ollama服务
+4. 整合各服务返回结果
+5. 生成最终救援方案
+6. 缓存结果优化性能
+
+## 数据模型定义
+
+### 输入数据模型
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import datetime
+
+class Item(BaseModel):
+    """物品信息模型"""
+    name: str = Field(..., description="物品名称", min_length=1, max_length=100)
+    material: str = Field(..., description="材质", min_length=1, max_length=50)
+    quantity: int = Field(..., description="数量", ge=1, le=1000)
+    location: str = Field(..., description="位置", min_length=1, max_length=100)
+    condition: Optional[str] = Field(None, description="状态", max_length=50)
+    flammability: Optional[str] = Field(None, description="易燃性", max_length=20)
+    toxicity: Optional[str] = Field(None, description="毒性", max_length=20)
+
+class Environment(BaseModel):
+    """环境信息模型"""
+    type: str = Field(..., description="环境类型", min_length=1, max_length=50)
+    area: str = Field(..., description="区域", min_length=1, max_length=50)
+    floor: Optional[int] = Field(None, description="楼层", ge=1, le=200)
+    ventilation: str = Field(..., description="通风情况", min_length=1, max_length=50)
+    exits: int = Field(..., description="出口数量", ge=1, le=20)
+    occupancy: Optional[int] = Field(None, description="人员数量", ge=0, le=1000)
+
+class RescuePlanRequest(BaseModel):
+    """救援方案请求模型"""
+    items: List[Item] = Field(..., description="物品列表", min_items=1, max_items=50)
+    environment: Environment = Field(..., description="环境信息")
+    additional_info: Optional[str] = Field(None, description="附加信息", max_length=500)
+    user_id: Optional[str] = Field(None, description="用户ID", max_length=50)
+```
+
+### 输出数据模型
+```python
+class RescueStep(BaseModel):
+    """救援步骤模型"""
+    step_number: int = Field(..., description="步骤编号")
+    description: str = Field(..., description="步骤描述")
+    equipment: List[str] = Field(default_factory=list, description="所需设备")
+    warnings: List[str] = Field(default_factory=list, description="注意事项")
+    estimated_time: Optional[int] = Field(None, description="预计时间(分钟)")
+
+class RescuePlan(BaseModel):
+    """救援方案模型"""
+    id: str = Field(..., description="方案ID")
+    title: str = Field(..., description="方案标题")
+    priority: str = Field(..., description="优先级", regex="^(低|中|高|紧急)$")
+    status: str = Field(default="active", description="状态")
+    steps: List[RescueStep] = Field(..., description="救援步骤")
+    equipment_list: List[str] = Field(..., description="设备清单")
+    warnings: List[str] = Field(..., description="总体警告")
+    estimated_duration: int = Field(..., description="预计总时长(分钟)")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+```
+
+## API接口规范
+
+### 1. 生成救援方案
+```python
+@router.post("/rescue-plan", response_model=RescuePlan)
+async def create_rescue_plan(
+    request: RescuePlanRequest,
+    current_user: User = Depends(get_current_user)
+) -> RescuePlan:
+    """
+    生成救援方案
+    
+    Args:
+        request: 救援方案请求数据
+        current_user: 当前用户
+        
+    Returns:
+        RescuePlan: 生成的救援方案
+        
+    Raises:
+        HTTPException: 400 - 输入数据无效
+        HTTPException: 500 - 服务内部错误
+    """
+```
+
+### 2. 获取救援方案
+```python
+@router.get("/rescue-plan/{plan_id}", response_model=RescuePlan)
+async def get_rescue_plan(
+    plan_id: str,
+    current_user: User = Depends(get_current_user)
+) -> RescuePlan:
+    """
+    获取救援方案详情
+    
+    Args:
+        plan_id: 方案ID
+        current_user: 当前用户
+        
+    Returns:
+        RescuePlan: 救援方案详情
+        
+    Raises:
+        HTTPException: 404 - 方案不存在
+        HTTPException: 403 - 权限不足
+    """
+```
+
+### 3. 更新救援方案
+```python
+@router.put("/rescue-plan/{plan_id}", response_model=RescuePlan)
+async def update_rescue_plan(
+    plan_id: str,
+    request: RescuePlanRequest,
+    current_user: User = Depends(get_current_user)
+) -> RescuePlan:
+    """
+    更新救援方案
+    
+    Args:
+        plan_id: 方案ID
+        request: 更新数据
+        current_user: 当前用户
+        
+    Returns:
+        RescuePlan: 更新后的救援方案
+    """
+```
+
+### 4. 删除救援方案
+```python
+@router.delete("/rescue-plan/{plan_id}")
+async def delete_rescue_plan(
+    plan_id: str,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    删除救援方案
+    
+    Args:
+        plan_id: 方案ID
+        current_user: 当前用户
+        
+    Returns:
+        dict: 删除结果
+    """
+```
+
+## 服务接口定义
+
+### 知识图谱服务接口
+```python
+class KnowledgeGraphService:
+    async def search_items(self, items: List[Item]) -> dict:
+        """搜索物品相关知识"""
+        pass
+    
+    async def search_environment(self, environment: Environment) -> dict:
+        """搜索环境相关知识"""
+        pass
+    
+    async def get_rescue_procedures(self, item_material: str) -> List[dict]:
+        """获取救援程序"""
+        pass
+```
+
+### RAG服务接口
+```python
+class RAGService:
+    async def search_documents(self, query: str, n_results: int = 5) -> List[dict]:
+        """搜索相关文档"""
+        pass
+    
+    async def enhance_context(self, knowledge: dict) -> str:
+        """增强上下文信息"""
+        pass
+```
+
+### Ollama服务接口
+```python
+class OllamaService:
+    async def generate_plan(
+        self, 
+        items: List[Item], 
+        environment: Environment, 
+        context: str
+    ) -> RescuePlan:
+        """生成救援方案"""
+        pass
+    
+    async def get_model_status(self) -> dict:
+        """获取模型状态"""
+        pass
+```
+
+### 缓存服务接口
+```python
+class CacheService:
+    async def get(self, key: str) -> Optional[dict]:
+        """获取缓存"""
+        pass
+    
+    async def set(self, key: str, value: dict, ttl: int = 3600) -> bool:
+        """设置缓存"""
+        pass
+    
+    async def delete(self, key: str) -> bool:
+        """删除缓存"""
+        pass
+```
+
+## 核心业务逻辑
+
+### 救援方案生成流程
+```python
+class EmergencyService:
+    def __init__(self):
+        self.knowledge_service = KnowledgeGraphService()
+        self.rag_service = RAGService()
+        self.ollama_service = OllamaService()
+        self.cache_service = CacheService()
+    
+    async def create_rescue_plan(self, request: RescuePlanRequest) -> RescuePlan:
+        """生成救援方案的核心流程"""
+        try:
+            # 1. 验证输入数据
+            validated_data = self.validate_input(request)
+            
+            # 2. 检查缓存
+            cache_key = self.generate_cache_key(validated_data)
+            cached_plan = await self.cache_service.get(cache_key)
+            if cached_plan:
+                return RescuePlan(**cached_plan)
+            
+            # 3. 并行调用知识图谱和RAG服务
+            knowledge_task = self.knowledge_service.search_items(validated_data.items)
+            rag_task = self.rag_service.search_documents(
+                self.build_query(validated_data)
+            )
+            
+            knowledge_result, rag_result = await asyncio.gather(
+                knowledge_task, rag_task
+            )
+            
+            # 4. 增强上下文
+            enhanced_context = await self.rag_service.enhance_context(
+                knowledge_result, rag_result
+            )
+            
+            # 5. 生成救援方案
+            rescue_plan = await self.ollama_service.generate_plan(
+                validated_data.items,
+                validated_data.environment,
+                enhanced_context
+            )
+            
+            # 6. 缓存结果
+            await self.cache_service.set(cache_key, rescue_plan.dict())
+            
+            return rescue_plan
+            
+        except Exception as e:
+            logger.error(f"生成救援方案失败: {str(e)}")
+            raise EmergencyServiceError(f"生成救援方案失败: {str(e)}")
+```
+
+## 错误处理
+
+### 自定义异常类
+```python
+class EmergencyServiceError(Exception):
+    """应急服务异常"""
+    pass
+
+class ValidationError(EmergencyServiceError):
+    """数据验证异常"""
+    pass
+
+class ServiceUnavailableError(EmergencyServiceError):
+    """服务不可用异常"""
+    pass
+
+class CacheError(EmergencyServiceError):
+    """缓存异常"""
+    pass
+```
+
+### 错误处理中间件
+```python
+@app.exception_handler(EmergencyServiceError)
+async def emergency_service_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Emergency Service Error",
+            "message": str(exc),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+```
+
+## 性能优化
+
+### 1. 异步处理
+- 使用asyncio进行并发处理
+- 并行调用多个服务
+- 异步数据库操作
+
+### 2. 缓存策略
+- 基于输入数据生成缓存键
+- 设置合理的TTL
+- 实现缓存预热
+
+### 3. 限流和熔断
+- 实现请求限流
+- 服务熔断机制
+- 降级处理
+
+## 监控和日志
+
+### 日志配置
+```python
+from loguru import logger
+
+logger.add(
+    "logs/emergency_service.log",
+    rotation="1 day",
+    retention="30 days",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+)
+```
+
+### 性能监控
+```python
+import time
+from prometheus_client import Counter, Histogram
+
+REQUEST_COUNT = Counter('emergency_requests_total', 'Total requests')
+REQUEST_DURATION = Histogram('emergency_request_duration_seconds', 'Request duration')
+
+@REQUEST_DURATION.time()
+async def create_rescue_plan(request: RescuePlanRequest):
+    REQUEST_COUNT.inc()
+    # 业务逻辑
+```
+
+## 测试要求
+
+### 单元测试
+- 数据验证测试
+- 业务逻辑测试
+- 异常处理测试
+
+### 集成测试
+- 服务调用测试
+- 缓存功能测试
+- 端到端测试
+
+### 性能测试
+- 并发请求测试
+- 响应时间测试
+- 内存使用测试
+
+## 部署配置
+
+### 环境变量
+```bash
+# 应急服务配置
+EMERGENCY_SERVICE_HOST=0.0.0.0
+EMERGENCY_SERVICE_PORT=8000
+EMERGENCY_SERVICE_WORKERS=4
+
+# 服务依赖配置
+KNOWLEDGE_GRAPH_SERVICE_URL=http://localhost:8001
+RAG_SERVICE_URL=http://localhost:8002
+OLLAMA_SERVICE_URL=http://localhost:8003
+CACHE_SERVICE_URL=redis://localhost:6379
+```
+
+### Docker配置
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+这个提示词文件提供了应急服务模块的完整开发指南，包括数据模型、API接口、业务逻辑、错误处理、性能优化等各个方面，确保开发人员能够顺利实现该模块。

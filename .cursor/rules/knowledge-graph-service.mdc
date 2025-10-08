@@ -1,0 +1,570 @@
+---
+alwaysApply: false
+---
+# 知识图谱服务模块 - 开发提示词
+
+## 模块概述
+知识图谱服务模块负责管理Neo4j图数据库，提供结构化知识检索和推理功能，处理物品、材质、环境、救援方案之间的复杂关系。
+
+## 技术栈
+- **图数据库**: Neo4j 5.15+
+- **Python驱动**: neo4j 5.15.0
+- **查询语言**: Cypher
+- **异步处理**: asyncio
+- **数据验证**: Pydantic
+
+## 核心职责
+1. 管理Neo4j数据库连接和会话
+2. 执行Cypher查询语句
+3. 处理物品-材质-环境关系检索
+4. 提供救援程序推理
+5. 管理知识图谱数据
+6. 提供图谱可视化数据
+
+## 数据模型定义
+
+### 图数据库节点模型
+```python
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
+
+class GraphNode(BaseModel):
+    """图节点模型"""
+    id: str
+    labels: List[str]
+    properties: Dict[str, Any]
+
+class GraphRelationship(BaseModel):
+    """图关系模型"""
+    id: str
+    start_node: str
+    end_node: str
+    relationship_type: str
+    properties: Dict[str, Any]
+
+class ItemNode(GraphNode):
+    """物品节点"""
+    name: str
+    material: str
+    flammability: str
+    toxicity: str
+    category: str
+
+class MaterialNode(GraphNode):
+    """材质节点"""
+    name: str
+    flammability_level: str
+    toxicity_level: str
+    melting_point: Optional[float]
+    ignition_point: Optional[float]
+
+class EnvironmentNode(GraphNode):
+    """环境节点"""
+    name: str
+    type: str
+    fire_characteristics: str
+    ventilation_level: str
+    evacuation_difficulty: str
+
+class RescuePlanNode(GraphNode):
+    """救援方案节点"""
+    name: str
+    priority: str
+    steps: List[str]
+    equipment: List[str]
+    warnings: List[str]
+```
+
+### 查询结果模型
+```python
+class KnowledgeSearchResult(BaseModel):
+    """知识搜索结果"""
+    items: List[ItemNode]
+    materials: List[MaterialNode]
+    environments: List[EnvironmentNode]
+    rescue_plans: List[RescuePlanNode]
+    relationships: List[GraphRelationship]
+
+class RescueProcedureResult(BaseModel):
+    """救援程序结果"""
+    procedure_id: str
+    name: str
+    priority: str
+    steps: List[dict]
+    equipment: List[str]
+    warnings: List[str]
+    applicability_score: float
+```
+
+## API接口规范
+
+### 1. 搜索物品知识
+```python
+@router.post("/search/items", response_model=KnowledgeSearchResult)
+async def search_items_knowledge(
+    items: List[Item],
+    current_user: User = Depends(get_current_user)
+) -> KnowledgeSearchResult:
+    """
+    搜索物品相关知识
+    
+    Args:
+        items: 物品列表
+        current_user: 当前用户
+        
+    Returns:
+        KnowledgeSearchResult: 搜索结果
+        
+    Raises:
+        HTTPException: 400 - 输入数据无效
+        HTTPException: 500 - 数据库查询错误
+    """
+```
+
+### 2. 搜索环境知识
+```python
+@router.post("/search/environment", response_model=KnowledgeSearchResult)
+async def search_environment_knowledge(
+    environment: Environment,
+    current_user: User = Depends(get_current_user)
+) -> KnowledgeSearchResult:
+    """
+    搜索环境相关知识
+    
+    Args:
+        environment: 环境信息
+        current_user: 当前用户
+        
+    Returns:
+        KnowledgeSearchResult: 搜索结果
+    """
+```
+
+### 3. 获取救援程序
+```python
+@router.get("/rescue-procedures/{material}", response_model=List[RescueProcedureResult])
+async def get_rescue_procedures(
+    material: str,
+    environment_type: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+) -> List[RescueProcedureResult]:
+    """
+    获取救援程序
+    
+    Args:
+        material: 材质名称
+        environment_type: 环境类型（可选）
+        current_user: 当前用户
+        
+    Returns:
+        List[RescueProcedureResult]: 救援程序列表
+    """
+```
+
+### 4. 获取图谱可视化数据
+```python
+@router.get("/graph/visualization", response_model=Dict[str, Any])
+async def get_graph_visualization_data(
+    center_node: Optional[str] = None,
+    depth: int = 2,
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    获取图谱可视化数据
+    
+    Args:
+        center_node: 中心节点ID（可选）
+        depth: 搜索深度
+        current_user: 当前用户
+        
+    Returns:
+        Dict[str, Any]: 可视化数据
+    """
+```
+
+## 核心服务类
+
+### 知识图谱服务类
+```python
+class KnowledgeGraphService:
+    def __init__(self, uri: str, user: str, password: str):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+    
+    async def search_items(self, items: List[Item]) -> KnowledgeSearchResult:
+        """搜索物品相关知识"""
+        async with self.driver.session() as session:
+            # 构建Cypher查询
+            query = """
+            MATCH (item:Item)-[:HAS_MATERIAL]->(material:Material)
+            WHERE item.name IN $item_names
+            OPTIONAL MATCH (item)-[:REQUIRES_RESCUE_PLAN]->(plan:RescuePlan)
+            OPTIONAL MATCH (material)-[:SUITABLE_FOR]->(env:Environment)
+            RETURN item, material, plan, env
+            """
+            
+            item_names = [item.name for item in items]
+            result = await session.run(query, item_names=item_names)
+            
+            return self._process_search_result(result)
+    
+    async def search_environment(self, environment: Environment) -> KnowledgeSearchResult:
+        """搜索环境相关知识"""
+        async with self.driver.session() as session:
+            query = """
+            MATCH (env:Environment {type: $env_type, area: $area})
+            OPTIONAL MATCH (env)-[:SUITABLE_FOR]->(material:Material)
+            OPTIONAL MATCH (material)-[:REQUIRES_RESCUE_PLAN]->(plan:RescuePlan)
+            RETURN env, material, plan
+            """
+            
+            result = await session.run(
+                query, 
+                env_type=environment.type, 
+                area=environment.area
+            )
+            
+            return self._process_search_result(result)
+    
+    async def get_rescue_procedures(
+        self, 
+        material: str, 
+        environment_type: Optional[str] = None
+    ) -> List[RescueProcedureResult]:
+        """获取救援程序"""
+        async with self.driver.session() as session:
+            if environment_type:
+                query = """
+                MATCH (material:Material {name: $material})
+                MATCH (material)-[:REQUIRES_RESCUE_PLAN]->(plan:RescuePlan)
+                MATCH (plan)-[:APPLICABLE_IN]->(env:Environment {type: $env_type})
+                RETURN plan
+                ORDER BY plan.priority DESC
+                """
+                result = await session.run(
+                    query, 
+                    material=material, 
+                    env_type=environment_type
+                )
+            else:
+                query = """
+                MATCH (material:Material {name: $material})
+                MATCH (material)-[:REQUIRES_RESCUE_PLAN]->(plan:RescuePlan)
+                RETURN plan
+                ORDER BY plan.priority DESC
+                """
+                result = await session.run(query, material=material)
+            
+            return self._process_rescue_procedures(result)
+    
+    async def get_graph_visualization_data(
+        self, 
+        center_node: Optional[str] = None, 
+        depth: int = 2
+    ) -> Dict[str, Any]:
+        """获取图谱可视化数据"""
+        async with self.driver.session() as session:
+            if center_node:
+                query = """
+                MATCH (center {id: $center_id})
+                CALL apoc.path.subgraphAll(center, {
+                    maxLevel: $depth,
+                    relationshipFilter: "HAS_MATERIAL|REQUIRES_RESCUE_PLAN|SUITABLE_FOR|APPLICABLE_IN"
+                })
+                YIELD nodes, relationships
+                RETURN nodes, relationships
+                """
+                result = await session.run(
+                    query, 
+                    center_id=center_node, 
+                    depth=depth
+                )
+            else:
+                query = """
+                MATCH (n)
+                WHERE n:Item OR n:Material OR n:Environment OR n:RescuePlan
+                OPTIONAL MATCH (n)-[r]-(m)
+                RETURN n, r, m
+                LIMIT 100
+                """
+                result = await session.run(query)
+            
+            return self._process_visualization_data(result)
+    
+    def _process_search_result(self, result) -> KnowledgeSearchResult:
+        """处理搜索结果"""
+        items = []
+        materials = []
+        environments = []
+        rescue_plans = []
+        relationships = []
+        
+        for record in result:
+            # 处理节点
+            for key, value in record.items():
+                if hasattr(value, 'labels'):
+                    node_data = dict(value)
+                    node_data['labels'] = list(value.labels)
+                    
+                    if 'Item' in value.labels:
+                        items.append(ItemNode(**node_data))
+                    elif 'Material' in value.labels:
+                        materials.append(MaterialNode(**node_data))
+                    elif 'Environment' in value.labels:
+                        environments.append(EnvironmentNode(**node_data))
+                    elif 'RescuePlan' in value.labels:
+                        rescue_plans.append(RescuePlanNode(**node_data))
+        
+        return KnowledgeSearchResult(
+            items=items,
+            materials=materials,
+            environments=environments,
+            rescue_plans=rescue_plans,
+            relationships=relationships
+        )
+```
+
+## 数据库初始化
+
+### 创建节点和关系
+```python
+class KnowledgeGraphInitializer:
+    def __init__(self, driver):
+        self.driver = driver
+    
+    async def initialize_schema(self):
+        """初始化数据库模式"""
+        async with self.driver.session() as session:
+            # 创建约束
+            constraints = [
+                "CREATE CONSTRAINT item_id IF NOT EXISTS FOR (i:Item) REQUIRE i.id IS UNIQUE",
+                "CREATE CONSTRAINT material_id IF NOT EXISTS FOR (m:Material) REQUIRE m.id IS UNIQUE",
+                "CREATE CONSTRAINT environment_id IF NOT EXISTS FOR (e:Environment) REQUIRE e.id IS UNIQUE",
+                "CREATE CONSTRAINT rescue_plan_id IF NOT EXISTS FOR (r:RescuePlan) REQUIRE r.id IS UNIQUE"
+            ]
+            
+            for constraint in constraints:
+                await session.run(constraint)
+    
+    async def create_sample_data(self):
+        """创建示例数据"""
+        async with self.driver.session() as session:
+            # 创建物品节点
+            items_query = """
+            CREATE (item1:Item {
+                id: 'item_001',
+                name: '椅子',
+                material: '木质',
+                flammability: '易燃',
+                toxicity: '低',
+                category: '家具'
+            })
+            CREATE (item2:Item {
+                id: 'item_002',
+                name: '冰箱',
+                material: '金属',
+                flammability: '不燃',
+                toxicity: '低',
+                category: '电器'
+            })
+            """
+            await session.run(items_query)
+            
+            # 创建材质节点
+            materials_query = """
+            CREATE (material1:Material {
+                id: 'material_001',
+                name: '木质',
+                flammability_level: '高',
+                toxicity_level: '低',
+                ignition_point: 300
+            })
+            CREATE (material2:Material {
+                id: 'material_002',
+                name: '金属',
+                flammability_level: '低',
+                toxicity_level: '低',
+                melting_point: 1500
+            })
+            """
+            await session.run(materials_query)
+            
+            # 创建关系
+            relationships_query = """
+            MATCH (item:Item {id: 'item_001'})
+            MATCH (material:Material {id: 'material_001'})
+            CREATE (item)-[:HAS_MATERIAL]->(material)
+            """
+            await session.run(relationships_query)
+```
+
+## 性能优化
+
+### 1. 索引优化
+```cypher
+// 创建索引
+CREATE INDEX item_name_index IF NOT EXISTS FOR (i:Item) ON (i.name)
+CREATE INDEX material_name_index IF NOT EXISTS FOR (m:Material) ON (m.name)
+CREATE INDEX environment_type_index IF NOT EXISTS FOR (e:Environment) ON (e.type)
+
+// 创建复合索引
+CREATE INDEX item_material_index IF NOT EXISTS FOR (i:Item) ON (i.name, i.material)
+```
+
+### 2. 查询优化
+```python
+class QueryOptimizer:
+    @staticmethod
+    def optimize_item_search_query(items: List[Item]) -> str:
+        """优化物品搜索查询"""
+        item_names = [item.name for item in items]
+        return f"""
+        MATCH (item:Item)
+        WHERE item.name IN {item_names}
+        WITH item
+        MATCH (item)-[:HAS_MATERIAL]->(material:Material)
+        OPTIONAL MATCH (item)-[:REQUIRES_RESCUE_PLAN]->(plan:RescuePlan)
+        RETURN item, material, plan
+        """
+```
+
+### 3. 连接池管理
+```python
+class ConnectionPoolManager:
+    def __init__(self, uri: str, user: str, password: str):
+        self.driver = GraphDatabase.driver(
+            uri, 
+            auth=(user, password),
+            max_connection_lifetime=3600,
+            max_connection_pool_size=50,
+            connection_acquisition_timeout=30
+        )
+    
+    async def get_session(self):
+        """获取数据库会话"""
+        return self.driver.session()
+```
+
+## 错误处理
+
+### 自定义异常类
+```python
+class KnowledgeGraphError(Exception):
+    """知识图谱服务异常"""
+    pass
+
+class DatabaseConnectionError(KnowledgeGraphError):
+    """数据库连接异常"""
+    pass
+
+class QueryExecutionError(KnowledgeGraphError):
+    """查询执行异常"""
+    pass
+
+class DataValidationError(KnowledgeGraphError):
+    """数据验证异常"""
+    pass
+```
+
+### 错误处理中间件
+```python
+@app.exception_handler(KnowledgeGraphError)
+async def knowledge_graph_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Knowledge Graph Service Error",
+            "message": str(exc),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+```
+
+## 监控和日志
+
+### 查询性能监控
+```python
+import time
+from prometheus_client import Histogram, Counter
+
+QUERY_DURATION = Histogram('neo4j_query_duration_seconds', 'Query duration')
+QUERY_COUNT = Counter('neo4j_queries_total', 'Total queries')
+
+class MonitoredSession:
+    def __init__(self, session):
+        self.session = session
+    
+    async def run(self, query, **kwargs):
+        start_time = time.time()
+        QUERY_COUNT.inc()
+        
+        try:
+            result = await self.session.run(query, **kwargs)
+            return result
+        finally:
+            QUERY_DURATION.observe(time.time() - start_time)
+```
+
+## 测试要求
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock
+
+class TestKnowledgeGraphService:
+    @pytest.fixture
+    def mock_driver(self):
+        driver = Mock()
+        session = AsyncMock()
+        driver.session.return_value.__aenter__.return_value = session
+        return driver
+    
+    @pytest.mark.asyncio
+    async def test_search_items(self, mock_driver):
+        service = KnowledgeGraphService("bolt://localhost:7687", "neo4j", "password")
+        service.driver = mock_driver
+        
+        items = [Item(name="椅子", material="木质", quantity=1, location="客厅")]
+        result = await service.search_items(items)
+        
+        assert isinstance(result, KnowledgeSearchResult)
+        assert len(result.items) > 0
+```
+
+### 集成测试
+```python
+@pytest.mark.integration
+class TestKnowledgeGraphIntegration:
+    @pytest.mark.asyncio
+    async def test_full_search_workflow(self):
+        # 测试完整的搜索工作流
+        pass
+```
+
+## 部署配置
+
+### 环境变量
+```bash
+# Neo4j配置
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+NEO4J_MAX_CONNECTIONS=50
+NEO4J_CONNECTION_TIMEOUT=30
+```
+
+### Docker配置
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+EXPOSE 8001
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+这个提示词文件提供了知识图谱服务模块的完整开发指南，包括数据模型、Cypher查询、API接口、性能优化等各个方面，确保开发人员能够顺利实现该模块。

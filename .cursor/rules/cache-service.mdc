@@ -1,0 +1,805 @@
+---
+alwaysApply: false
+---
+# 缓存服务模块 - 开发提示词
+
+## 模块概述
+缓存服务模块负责提供高性能缓存管理，基于Redis实现分布式缓存，优化系统响应速度，减少数据库查询压力，提升整体系统性能。
+
+## 技术栈
+- **缓存数据库**: Redis 7+
+- **Python客户端**: redis-py + aioredis
+- **序列化**: pickle + json
+- **压缩**: gzip + lz4
+- **监控**: prometheus-client
+
+## 核心职责
+1. 管理Redis缓存连接和会话
+2. 实现多种缓存策略
+3. 提供缓存读写接口
+4. 处理缓存失效和更新
+5. 实现分布式缓存同步
+6. 监控缓存性能指标
+
+## 数据模型定义
+
+### 缓存配置
+```python
+from pydantic import BaseModel, Field
+from typing import Any, Optional, Dict, List, Union
+from datetime import datetime, timedelta
+from enum import Enum
+import json
+
+class CacheStrategy(str, Enum):
+    """缓存策略枚举"""
+    LRU = "lru"  # 最近最少使用
+    LFU = "lfu"  # 最少使用频率
+    TTL = "ttl"  # 基于时间过期
+    WRITE_THROUGH = "write_through"  # 写穿透
+    WRITE_BEHIND = "write_behind"  # 写回
+
+class CacheConfig(BaseModel):
+    """缓存配置模型"""
+    host: str = Field(default="localhost", description="Redis主机")
+    port: int = Field(default=6379, description="Redis端口")
+    password: Optional[str] = Field(None, description="Redis密码")
+    db: int = Field(default=0, description="数据库编号")
+    max_connections: int = Field(default=50, description="最大连接数")
+    connection_timeout: int = Field(default=30, description="连接超时(秒)")
+    socket_timeout: int = Field(default=30, description="Socket超时(秒)")
+    retry_on_timeout: bool = Field(default=True, description="超时重试")
+    decode_responses: bool = Field(default=True, description="解码响应")
+
+class CacheItem(BaseModel):
+    """缓存项模型"""
+    key: str = Field(..., description="缓存键")
+    value: Any = Field(..., description="缓存值")
+    ttl: Optional[int] = Field(None, description="生存时间(秒)")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
+    accessed_at: datetime = Field(default_factory=datetime.utcnow, description="访问时间")
+    access_count: int = Field(default=0, description="访问次数")
+    size_bytes: int = Field(default=0, description="大小(字节)")
+
+class CacheStats(BaseModel):
+    """缓存统计模型"""
+    total_keys: int = Field(..., description="总键数")
+    memory_usage: int = Field(..., description="内存使用量(字节)")
+    hit_count: int = Field(..., description="命中次数")
+    miss_count: int = Field(..., description="未命中次数")
+    hit_rate: float = Field(..., description="命中率")
+    eviction_count: int = Field(..., description="淘汰次数")
+    expired_count: int = Field(..., description="过期次数")
+    last_cleanup: Optional[datetime] = Field(None, description="最后清理时间")
+```
+
+### 缓存操作模型
+```python
+class CacheOperation(BaseModel):
+    """缓存操作模型"""
+    operation: str = Field(..., description="操作类型")
+    key: str = Field(..., description="缓存键")
+    success: bool = Field(..., description="操作是否成功")
+    duration_ms: float = Field(..., description="操作耗时(毫秒)")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="时间戳")
+
+class CacheBatchOperation(BaseModel):
+    """批量缓存操作模型"""
+    operations: List[Dict[str, Any]] = Field(..., description="操作列表")
+    atomic: bool = Field(default=True, description="是否原子操作")
+    pipeline: bool = Field(default=False, description="是否使用管道")
+
+class CachePattern(BaseModel):
+    """缓存模式模型"""
+    pattern: str = Field(..., description="键模式")
+    strategy: CacheStrategy = Field(..., description="缓存策略")
+    ttl: Optional[int] = Field(None, description="默认TTL")
+    max_size: Optional[int] = Field(None, description="最大大小")
+    compression: bool = Field(default=False, description="是否压缩")
+```
+
+## API接口规范
+
+### 1. 设置缓存
+```python
+@router.post("/cache/set")
+async def set_cache(
+    key: str,
+    value: Any,
+    ttl: Optional[int] = None,
+    strategy: CacheStrategy = CacheStrategy.TTL,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    设置缓存
+    
+    Args:
+        key: 缓存键
+        value: 缓存值
+        ttl: 生存时间(秒)
+        strategy: 缓存策略
+        current_user: 当前用户
+        
+    Returns:
+        dict: 操作结果
+        
+    Raises:
+        HTTPException: 400 - 参数无效
+        HTTPException: 500 - 缓存操作失败
+    """
+```
+
+### 2. 获取缓存
+```python
+@router.get("/cache/get/{key}")
+async def get_cache(
+    key: str,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    获取缓存
+    
+    Args:
+        key: 缓存键
+        current_user: 当前用户
+        
+    Returns:
+        Any: 缓存值
+        
+    Raises:
+        HTTPException: 404 - 缓存不存在
+        HTTPException: 500 - 缓存操作失败
+    """
+```
+
+### 3. 删除缓存
+```python
+@router.delete("/cache/delete/{key}")
+async def delete_cache(
+    key: str,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    删除缓存
+    
+    Args:
+        key: 缓存键
+        current_user: 当前用户
+        
+    Returns:
+        dict: 操作结果
+    """
+```
+
+### 4. 批量操作
+```python
+@router.post("/cache/batch", response_model=List[CacheOperation])
+async def batch_cache_operations(
+    operations: CacheBatchOperation,
+    current_user: User = Depends(get_current_user)
+) -> List[CacheOperation]:
+    """
+    批量缓存操作
+    
+    Args:
+        operations: 批量操作
+        current_user: 当前用户
+        
+    Returns:
+        List[CacheOperation]: 操作结果列表
+    """
+```
+
+### 5. 获取缓存统计
+```python
+@router.get("/cache/stats", response_model=CacheStats)
+async def get_cache_stats(
+    current_user: User = Depends(get_current_user)
+) -> CacheStats:
+    """
+    获取缓存统计信息
+    
+    Args:
+        current_user: 当前用户
+        
+    Returns:
+        CacheStats: 缓存统计
+    """
+```
+
+## 核心服务类
+
+### 缓存服务类
+```python
+import redis.asyncio as redis
+import pickle
+import gzip
+import json
+import asyncio
+from typing import Any, Optional, Dict, List, Union
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+class CacheService:
+    def __init__(self, config: CacheConfig):
+        self.config = config
+        self.redis_client = None
+        self.stats = {
+            "hit_count": 0,
+            "miss_count": 0,
+            "set_count": 0,
+            "delete_count": 0,
+            "error_count": 0
+        }
+        self.patterns = {}
+        self._initialize_client()
+    
+    def _initialize_client(self):
+        """初始化Redis客户端"""
+        try:
+            self.redis_client = redis.Redis(
+                host=self.config.host,
+                port=self.config.port,
+                password=self.config.password,
+                db=self.config.db,
+                max_connections=self.config.max_connections,
+                socket_timeout=self.config.socket_timeout,
+                retry_on_timeout=self.config.retry_on_timeout,
+                decode_responses=self.config.decode_responses
+            )
+            logger.info("Redis客户端初始化成功")
+        except Exception as e:
+            logger.error(f"Redis客户端初始化失败: {str(e)}")
+            raise CacheServiceError(f"Redis客户端初始化失败: {str(e)}")
+    
+    async def set(
+        self, 
+        key: str, 
+        value: Any, 
+        ttl: Optional[int] = None,
+        strategy: CacheStrategy = CacheStrategy.TTL
+    ) -> bool:
+        """设置缓存"""
+        try:
+            start_time = time.time()
+            
+            # 序列化值
+            serialized_value = await self._serialize_value(value)
+            
+            # 应用缓存策略
+            cache_key = await self._apply_strategy(key, strategy)
+            
+            # 设置缓存
+            if ttl:
+                result = await self.redis_client.setex(cache_key, ttl, serialized_value)
+            else:
+                result = await self.redis_client.set(cache_key, serialized_value)
+            
+            # 更新统计
+            self.stats["set_count"] += 1
+            operation_time = (time.time() - start_time) * 1000
+            
+            # 记录操作
+            await self._record_operation("SET", key, result, operation_time)
+            
+            return result
+            
+        except Exception as e:
+            self.stats["error_count"] += 1
+            logger.error(f"设置缓存失败: {str(e)}")
+            raise CacheServiceError(f"设置缓存失败: {str(e)}")
+    
+    async def get(self, key: str, strategy: CacheStrategy = CacheStrategy.TTL) -> Optional[Any]:
+        """获取缓存"""
+        try:
+            start_time = time.time()
+            
+            # 应用缓存策略
+            cache_key = await self._apply_strategy(key, strategy)
+            
+            # 获取缓存
+            serialized_value = await self.redis_client.get(cache_key)
+            
+            if serialized_value is None:
+                self.stats["miss_count"] += 1
+                operation_time = (time.time() - start_time) * 1000
+                await self._record_operation("GET", key, False, operation_time)
+                return None
+            
+            # 反序列化值
+            value = await self._deserialize_value(serialized_value)
+            
+            # 更新统计
+            self.stats["hit_count"] += 1
+            operation_time = (time.time() - start_time) * 1000
+            await self._record_operation("GET", key, True, operation_time)
+            
+            return value
+            
+        except Exception as e:
+            self.stats["error_count"] += 1
+            logger.error(f"获取缓存失败: {str(e)}")
+            raise CacheServiceError(f"获取缓存失败: {str(e)}")
+    
+    async def delete(self, key: str, strategy: CacheStrategy = CacheStrategy.TTL) -> bool:
+        """删除缓存"""
+        try:
+            start_time = time.time()
+            
+            # 应用缓存策略
+            cache_key = await self._apply_strategy(key, strategy)
+            
+            # 删除缓存
+            result = await self.redis_client.delete(cache_key)
+            
+            # 更新统计
+            self.stats["delete_count"] += 1
+            operation_time = (time.time() - start_time) * 1000
+            await self._record_operation("DELETE", key, bool(result), operation_time)
+            
+            return bool(result)
+            
+        except Exception as e:
+            self.stats["error_count"] += 1
+            logger.error(f"删除缓存失败: {str(e)}")
+            raise CacheServiceError(f"删除缓存失败: {str(e)}")
+    
+    async def exists(self, key: str, strategy: CacheStrategy = CacheStrategy.TTL) -> bool:
+        """检查缓存是否存在"""
+        try:
+            cache_key = await self._apply_strategy(key, strategy)
+            result = await self.redis_client.exists(cache_key)
+            return bool(result)
+        except Exception as e:
+            logger.error(f"检查缓存存在性失败: {str(e)}")
+            raise CacheServiceError(f"检查缓存存在性失败: {str(e)}")
+    
+    async def batch_set(self, items: Dict[str, Any], ttl: Optional[int] = None) -> List[bool]:
+        """批量设置缓存"""
+        try:
+            pipeline = self.redis_client.pipeline()
+            
+            for key, value in items.items():
+                serialized_value = await self._serialize_value(value)
+                if ttl:
+                    pipeline.setex(key, ttl, serialized_value)
+                else:
+                    pipeline.set(key, serialized_value)
+            
+            results = await pipeline.execute()
+            self.stats["set_count"] += len(items)
+            
+            return [bool(result) for result in results]
+            
+        except Exception as e:
+            logger.error(f"批量设置缓存失败: {str(e)}")
+            raise CacheServiceError(f"批量设置缓存失败: {str(e)}")
+    
+    async def batch_get(self, keys: List[str]) -> Dict[str, Any]:
+        """批量获取缓存"""
+        try:
+            pipeline = self.redis_client.pipeline()
+            
+            for key in keys:
+                pipeline.get(key)
+            
+            results = await pipeline.execute()
+            
+            batch_results = {}
+            for key, serialized_value in zip(keys, results):
+                if serialized_value is not None:
+                    value = await self._deserialize_value(serialized_value)
+                    batch_results[key] = value
+                    self.stats["hit_count"] += 1
+                else:
+                    self.stats["miss_count"] += 1
+            
+            return batch_results
+            
+        except Exception as e:
+            logger.error(f"批量获取缓存失败: {str(e)}")
+            raise CacheServiceError(f"批量获取缓存失败: {str(e)}")
+    
+    async def get_stats(self) -> CacheStats:
+        """获取缓存统计信息"""
+        try:
+            info = await self.redis_client.info()
+            
+            total_keys = info.get("db0", {}).get("keys", 0)
+            memory_usage = info.get("used_memory", 0)
+            
+            hit_count = self.stats["hit_count"]
+            miss_count = self.stats["miss_count"]
+            total_requests = hit_count + miss_count
+            hit_rate = hit_count / total_requests if total_requests > 0 else 0.0
+            
+            return CacheStats(
+                total_keys=total_keys,
+                memory_usage=memory_usage,
+                hit_count=hit_count,
+                miss_count=miss_count,
+                hit_rate=hit_rate,
+                eviction_count=info.get("evicted_keys", 0),
+                expired_count=info.get("expired_keys", 0),
+                last_cleanup=datetime.utcnow()
+            )
+            
+        except Exception as e:
+            logger.error(f"获取缓存统计失败: {str(e)}")
+            raise CacheServiceError(f"获取缓存统计失败: {str(e)}")
+    
+    async def clear_pattern(self, pattern: str) -> int:
+        """清除匹配模式的缓存"""
+        try:
+            keys = await self.redis_client.keys(pattern)
+            if keys:
+                result = await self.redis_client.delete(*keys)
+                return result
+            return 0
+        except Exception as e:
+            logger.error(f"清除模式缓存失败: {str(e)}")
+            raise CacheServiceError(f"清除模式缓存失败: {str(e)}")
+    
+    async def _serialize_value(self, value: Any) -> str:
+        """序列化值"""
+        try:
+            # 尝试JSON序列化
+            if isinstance(value, (dict, list, str, int, float, bool)) or value is None:
+                return json.dumps(value, ensure_ascii=False)
+            else:
+                # 使用pickle序列化
+                pickled = pickle.dumps(value)
+                # 压缩数据
+                compressed = gzip.compress(pickled)
+                return compressed.hex()
+        except Exception as e:
+            logger.error(f"序列化值失败: {str(e)}")
+            raise CacheServiceError(f"序列化值失败: {str(e)}")
+    
+    async def _deserialize_value(self, serialized_value: str) -> Any:
+        """反序列化值"""
+        try:
+            # 尝试JSON反序列化
+            try:
+                return json.loads(serialized_value)
+            except (json.JSONDecodeError, TypeError):
+                # 使用pickle反序列化
+                compressed = bytes.fromhex(serialized_value)
+                decompressed = gzip.decompress(compressed)
+                return pickle.loads(decompressed)
+        except Exception as e:
+            logger.error(f"反序列化值失败: {str(e)}")
+            raise CacheServiceError(f"反序列化值失败: {str(e)}")
+    
+    async def _apply_strategy(self, key: str, strategy: CacheStrategy) -> str:
+        """应用缓存策略"""
+        if strategy == CacheStrategy.LRU:
+            return f"lru:{key}"
+        elif strategy == CacheStrategy.LFU:
+            return f"lfu:{key}"
+        elif strategy == CacheStrategy.WRITE_THROUGH:
+            return f"wt:{key}"
+        elif strategy == CacheStrategy.WRITE_BEHIND:
+            return f"wb:{key}"
+        else:  # TTL
+            return f"ttl:{key}"
+    
+    async def _record_operation(
+        self, 
+        operation: str, 
+        key: str, 
+        success: bool, 
+        duration_ms: float
+    ):
+        """记录操作"""
+        # 这里可以记录到日志或监控系统
+        logger.debug(f"缓存操作: {operation}, 键: {key}, 成功: {success}, 耗时: {duration_ms}ms")
+```
+
+## 缓存策略实现
+
+### LRU缓存策略
+```python
+class LRUCacheStrategy:
+    def __init__(self, max_size: int = 1000):
+        self.max_size = max_size
+        self.access_order = []
+        self.cache_data = {}
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """获取缓存项"""
+        if key in self.cache_data:
+            # 更新访问顺序
+            self.access_order.remove(key)
+            self.access_order.append(key)
+            return self.cache_data[key]
+        return None
+    
+    async def set(self, key: str, value: Any) -> bool:
+        """设置缓存项"""
+        if key in self.cache_data:
+            # 更新现有项
+            self.cache_data[key] = value
+            self.access_order.remove(key)
+            self.access_order.append(key)
+        else:
+            # 添加新项
+            if len(self.cache_data) >= self.max_size:
+                # 移除最近最少使用的项
+                lru_key = self.access_order.pop(0)
+                del self.cache_data[lru_key]
+            
+            self.cache_data[key] = value
+            self.access_order.append(key)
+        
+        return True
+```
+
+### 写穿透策略
+```python
+class WriteThroughStrategy:
+    def __init__(self, cache_service: CacheService, database_service):
+        self.cache_service = cache_service
+        self.database_service = database_service
+    
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+        """写穿透设置"""
+        try:
+            # 同时写入缓存和数据库
+            cache_result = await self.cache_service.set(key, value, ttl)
+            db_result = await self.database_service.set(key, value)
+            
+            return cache_result and db_result
+        except Exception as e:
+            logger.error(f"写穿透设置失败: {str(e)}")
+            return False
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """获取缓存项"""
+        # 先从缓存获取
+        value = await self.cache_service.get(key)
+        if value is not None:
+            return value
+        
+        # 缓存未命中，从数据库获取
+        value = await self.database_service.get(key)
+        if value is not None:
+            # 写入缓存
+            await self.cache_service.set(key, value)
+        
+        return value
+```
+
+## 性能优化
+
+### 1. 连接池优化
+```python
+class OptimizedConnectionPool:
+    def __init__(self, config: CacheConfig):
+        self.config = config
+        self.pool = None
+        self._initialize_pool()
+    
+    def _initialize_pool(self):
+        """初始化连接池"""
+        self.pool = redis.ConnectionPool(
+            host=self.config.host,
+            port=self.config.port,
+            password=self.config.password,
+            db=self.config.db,
+            max_connections=self.config.max_connections,
+            socket_timeout=self.config.socket_timeout,
+            retry_on_timeout=self.config.retry_on_timeout,
+            decode_responses=self.config.decode_responses
+        )
+    
+    def get_client(self) -> redis.Redis:
+        """获取Redis客户端"""
+        return redis.Redis(connection_pool=self.pool)
+```
+
+### 2. 管道优化
+```python
+class PipelineOptimizer:
+    def __init__(self, redis_client):
+        self.redis_client = redis_client
+    
+    async def batch_operations(self, operations: List[Dict[str, Any]]) -> List[Any]:
+        """批量操作优化"""
+        pipeline = self.redis_client.pipeline()
+        
+        for operation in operations:
+            op_type = operation.get("type")
+            key = operation.get("key")
+            value = operation.get("value")
+            ttl = operation.get("ttl")
+            
+            if op_type == "SET":
+                if ttl:
+                    pipeline.setex(key, ttl, value)
+                else:
+                    pipeline.set(key, value)
+            elif op_type == "GET":
+                pipeline.get(key)
+            elif op_type == "DELETE":
+                pipeline.delete(key)
+        
+        return await pipeline.execute()
+```
+
+### 3. 压缩优化
+```python
+class CompressionOptimizer:
+    def __init__(self, compression_threshold: int = 1024):
+        self.compression_threshold = compression_threshold
+    
+    def should_compress(self, data: bytes) -> bool:
+        """判断是否应该压缩"""
+        return len(data) > self.compression_threshold
+    
+    def compress(self, data: bytes) -> bytes:
+        """压缩数据"""
+        return gzip.compress(data)
+    
+    def decompress(self, data: bytes) -> bytes:
+        """解压数据"""
+        return gzip.decompress(data)
+```
+
+## 监控和指标
+
+### 性能监控
+```python
+from prometheus_client import Counter, Histogram, Gauge
+
+class CacheMetrics:
+    def __init__(self):
+        self.cache_operations = Counter(
+            'cache_operations_total',
+            'Total cache operations',
+            ['operation', 'status']
+        )
+        self.cache_duration = Histogram(
+            'cache_operation_duration_seconds',
+            'Cache operation duration',
+            ['operation']
+        )
+        self.cache_size = Gauge(
+            'cache_size_bytes',
+            'Cache size in bytes'
+        )
+        self.cache_hit_rate = Gauge(
+            'cache_hit_rate',
+            'Cache hit rate'
+        )
+    
+    def record_operation(self, operation: str, success: bool, duration: float):
+        """记录操作指标"""
+        status = "success" if success else "failure"
+        self.cache_operations.labels(operation=operation, status=status).inc()
+        self.cache_duration.labels(operation=operation).observe(duration)
+    
+    def update_cache_size(self, size: int):
+        """更新缓存大小"""
+        self.cache_size.set(size)
+    
+    def update_hit_rate(self, hit_rate: float):
+        """更新命中率"""
+        self.cache_hit_rate.set(hit_rate)
+```
+
+## 错误处理
+
+### 自定义异常类
+```python
+class CacheServiceError(Exception):
+    """缓存服务异常"""
+    pass
+
+class ConnectionError(CacheServiceError):
+    """连接异常"""
+    pass
+
+class SerializationError(CacheServiceError):
+    """序列化异常"""
+    pass
+
+class DeserializationError(CacheServiceError):
+    """反序列化异常"""
+    pass
+
+class TimeoutError(CacheServiceError):
+    """超时异常"""
+    pass
+```
+
+### 错误处理中间件
+```python
+@app.exception_handler(CacheServiceError)
+async def cache_service_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Cache Service Error",
+            "message": str(exc),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+```
+
+## 测试要求
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+
+class TestCacheService:
+    @pytest.fixture
+    def mock_redis_client(self):
+        client = AsyncMock()
+        return client
+    
+    @pytest.fixture
+    def cache_service(self, mock_redis_client):
+        config = CacheConfig(host="localhost", port=6379)
+        service = CacheService(config)
+        service.redis_client = mock_redis_client
+        return service
+    
+    @pytest.mark.asyncio
+    async def test_set_cache(self, cache_service, mock_redis_client):
+        mock_redis_client.set.return_value = True
+        
+        result = await cache_service.set("test_key", "test_value", ttl=3600)
+        
+        assert result is True
+        mock_redis_client.setex.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_get_cache(self, cache_service, mock_redis_client):
+        mock_redis_client.get.return_value = '"test_value"'
+        
+        result = await cache_service.get("test_key")
+        
+        assert result == "test_value"
+        mock_redis_client.get.assert_called_once()
+```
+
+## 部署配置
+
+### 环境变量
+```bash
+# Redis配置
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+REDIS_MAX_CONNECTIONS=50
+REDIS_CONNECTION_TIMEOUT=30
+REDIS_SOCKET_TIMEOUT=30
+
+# 缓存配置
+CACHE_DEFAULT_TTL=3600
+CACHE_MAX_SIZE=1000
+CACHE_COMPRESSION_THRESHOLD=1024
+CACHE_MONITORING_ENABLED=true
+```
+
+### Docker配置
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+EXPOSE 8004
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004"]
+```
+
+这个提示词文件提供了缓存服务模块的完整开发指南，包括Redis集成、缓存策略、性能优化、监控指标等各个方面，确保开发人员能够顺利实现该模块。

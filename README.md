@@ -77,7 +77,29 @@ fire-emergency-rag/
 - Docker & Docker Compose
 - Git
 
-### 安装步骤
+### 一键启动（推荐）
+
+**Windows用户：**
+```bash
+# 克隆项目
+git clone https://github.com/lnlll162/Fire-Emergency-RAG-System.git
+cd Fire-Emergency-RAG-System
+
+# 一键启动开发环境
+scripts\start_dev.bat
+```
+
+**Linux/Mac用户：**
+```bash
+# 克隆项目
+git clone https://github.com/lnlll162/Fire-Emergency-RAG-System.git
+cd Fire-Emergency-RAG-System
+
+# 一键启动开发环境
+./scripts/start_dev.sh
+```
+
+### 手动安装步骤
 
 1. **克隆项目**
 ```bash
@@ -85,45 +107,68 @@ git clone https://github.com/lnlll162/Fire-Emergency-RAG-System.git
 cd Fire-Emergency-RAG-System
 ```
 
-2. **启动数据库服务**
+2. **配置环境变量**
 ```bash
-docker-compose up -d postgres redis neo4j
+# 复制环境变量模板
+cp env.example .env
+# 根据需要修改 .env 文件
 ```
 
-3. **安装后端依赖**
+3. **启动数据库服务**
 ```bash
-cd backend
+docker-compose up -d postgres redis neo4j chromadb ollama
+```
+
+4. **初始化数据库**
+```bash
+python scripts/setup_databases.py
+```
+
+5. **安装后端依赖**
+```bash
 pip install -r requirements.txt
 ```
 
-4. **安装前端依赖**
+6. **启动开发服务器**
 ```bash
-cd frontend
-npm install
-```
-
-5. **启动开发服务器**
-```bash
-# 后端
-cd backend
+# 后端服务
 uvicorn app.main:app --reload
 
-# 前端
+# 前端服务（待开发）
 cd frontend
+npm install
 npm run dev
 ```
 
 ## 开发进度
 
+### ✅ 已完成 (v0.2.0)
 - [x] 项目架构设计
 - [x] 技术栈选型
 - [x] 数据库设计
 - [x] API接口设计
-- [ ] 后端服务开发
+- [x] 项目基础设施搭建
+- [x] 共享基础库开发
+- [x] Docker环境配置
+- [x] 数据库初始化脚本
+- [x] RAG服务开发 (100%)
+- [x] 知识图谱服务开发 (100%)
+- [x] 知识库构建
+- [x] 系统集成测试 (93.3%通过率)
+
+### ⏳ 进行中
+- [ ] Ollama服务开发 (0%)
+- [ ] 缓存服务开发 (0%)
+- [ ] 用户服务开发 (0%)
+
+### 📋 待开发
+- [ ] 管理服务开发
+- [ ] 用户输入服务开发
+- [ ] 应急服务开发
 - [ ] 前端界面开发
-- [ ] 知识库构建
-- [ ] 系统集成测试
 - [ ] 部署上线
+
+**详细进度**: [项目状态报告](docs/project_status.md)
 
 ## 贡献指南
 

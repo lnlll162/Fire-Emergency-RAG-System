@@ -1,0 +1,333 @@
+---
+alwaysApply: false
+---
+# 服务配置统一管理 - 开发提示词
+
+## 统一服务配置
+
+### 服务端口分配
+```yaml
+# 服务端口配置
+services:
+  emergency_service: 8000    # 应急服务 - 主API
+  knowledge_graph: 8001      # 知识图谱服务
+  rag_service: 8002          # RAG服务
+  ollama_service: 8003       # Ollama服务
+  cache_service: 8004        # 缓存服务
+  admin_service: 8005        # 管理服务
+  user_service: 8006         # 用户服务
+  user_input_service: 3000   # 前端服务
+
+# 数据库端口配置
+databases:
+  postgresql: 5432
+  redis: 6379
+  neo4j_http: 7474
+  neo4j_bolt: 7687
+  chromadb: 8007             # 调整ChromaDB端口
+  ollama: 11434
+```
+
+### 统一数据模型
+```python
+# 在 shared/models.py 中定义统一的数据模型
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from enum import Enum
+
+class ItemMaterial(str, Enum):
+    """材质枚举"""
+    WOOD = "木质"
+    METAL = "金属"
+    PLASTIC = "塑料"
+    GLASS = "玻璃"
+    CERAMIC = "陶瓷"
+    FABRIC = "布料"
+    LEATHER = "皮革"
+    OTHER = "其他"
+
+class FlammabilityLevel(str, Enum):
+    """易燃性等级"""
+    NON_FLAMMABLE = "不燃"
+    DIFFICULT_FLAMMABLE = "难燃"
+    FLAMMABLE = "易燃"
+    HIGHLY_FLAMMABLE = "极易燃"
+
+class ToxicityLevel(str, Enum):
+    """毒性等级"""
+    NON_TOXIC = "无毒"
+    LOW_TOXIC = "低毒"
+    MEDIUM_TOXIC = "中毒"
+    HIGH_TOXIC = "高毒"
+    EXTREMELY_TOXIC = "剧毒"
+
+class Item(BaseModel):
+    """统一物品模型"""
+    name: str = Field(..., description="物品名称", min_length=1, max_length=100)
+    material: ItemMaterial = Field(..., description="材质")
+    quantity: int = Field(..., description="数量", ge=1, le=1000)
+    location: str = Field(..., description="位置", min_length=1, max_length=100)
+    condition: Optional[str] = Field(None, description="状态", max_length=50)
+    flammability: Optional[FlammabilityLevel] = Field(None, description="易燃性")
+    toxicity: Optional[ToxicityLevel] = Field(None, description="毒性")
+    size: Optional[Dict[str, Any]] = Field(None, description="尺寸信息")
+    weight: Optional[Dict[str, Any]] = Field(None, description="重量信息")
+
+class EnvironmentType(str, Enum):
+    """环境类型枚举"""
+    INDOOR = "室内"
+    OUTDOOR = "室外"
+    SEMI_OUTDOOR = "半室外"
+
+class AreaType(str, Enum):
+    """区域类型枚举"""
+    RESIDENTIAL = "住宅"
+    COMMERCIAL = "商业"
+    INDUSTRIAL = "工业"
+    PUBLIC_BUILDING = "公共建筑"
+    VEHICLE = "交通工具"
+    OTHER = "其他"
+
+class VentilationLevel(str, Enum):
+    """通风等级枚举"""
+    EXCELLENT = "良好"
+    GOOD = "一般"
+    POOR = "较差"
+    VERY_POOR = "很差"
+
+class Environment(BaseModel):
+    """统一环境模型"""
+    type: EnvironmentType = Field(..., description="环境类型")
+    area: AreaType = Field(..., description="区域类型")
+    floor: Optional[int] = Field(None, description="楼层", ge=-10, le=200)
+    ventilation: VentilationLevel = Field(..., description="通风情况")
+    exits: int = Field(..., description="出口数量", ge=1, le=20)
+    occupancy: Optional[int] = Field(None, description="人员数量", ge=0, le=10000)
+    building_type: Optional[str] = Field(None, description="建筑类型")
+    fire_safety_equipment: Optional[List[str]] = Field(None, description="消防设备")
+    special_conditions: Optional[str] = Field(None, description="特殊条件", max_length=500)
+
+class RescuePlanRequest(BaseModel):
+    """统一救援方案请求模型"""
+    items: List[Item] = Field(..., description="物品列表", min_items=1, max_items=50)
+    environment: Environment = Field(..., description="环境信息")
+    additional_info: Optional[str] = Field(None, description="附加信息", max_length=1000)
+    urgency_level: str = Field(default="中", description="紧急程度")
+    contact_info: Optional[Dict[str, Any]] = Field(None, description="联系信息")
+    user_id: Optional[str] = Field(None, description="用户ID")
+```
+
+### 服务发现配置
+```python
+# 在 shared/service_registry.py 中定义服务发现
+from typing import Dict, Optional
+import os
+
+class ServiceRegistry:
+    """服务注册中心"""
+    
+    SERVICES = {
+        "emergency_service": {
+            "host": os.getenv("EMERGENCY_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("EMERGENCY_SERVICE_PORT", "8000")),
+            "base_url": f"http://{os.getenv('EMERGENCY_SERVICE_HOST', 'localhost')}:{os.getenv('EMERGENCY_SERVICE_PORT', '8000')}"
+        },
+        "knowledge_graph": {
+            "host": os.getenv("KNOWLEDGE_GRAPH_HOST", "localhost"),
+            "port": int(os.getenv("KNOWLEDGE_GRAPH_PORT", "8001")),
+            "base_url": f"http://{os.getenv('KNOWLEDGE_GRAPH_HOST', 'localhost')}:{os.getenv('KNOWLEDGE_GRAPH_PORT', '8001')}"
+        },
+        "rag_service": {
+            "host": os.getenv("RAG_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("RAG_SERVICE_PORT", "8002")),
+            "base_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '8002')}"
+        },
+        "ollama_service": {
+            "host": os.getenv("OLLAMA_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("OLLAMA_SERVICE_PORT", "8003")),
+            "base_url": f"http://{os.getenv('OLLAMA_SERVICE_HOST', 'localhost')}:{os.getenv('OLLAMA_SERVICE_PORT', '8003')}"
+        },
+        "cache_service": {
+            "host": os.getenv("CACHE_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("CACHE_SERVICE_PORT", "8004")),
+            "base_url": f"http://{os.getenv('CACHE_SERVICE_HOST', 'localhost')}:{os.getenv('CACHE_SERVICE_PORT', '8004')}"
+        },
+        "admin_service": {
+            "host": os.getenv("ADMIN_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("ADMIN_SERVICE_PORT", "8005")),
+            "base_url": f"http://{os.getenv('ADMIN_SERVICE_HOST', 'localhost')}:{os.getenv('ADMIN_SERVICE_PORT', '8005')}"
+        },
+        "user_service": {
+            "host": os.getenv("USER_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("USER_SERVICE_PORT", "8006")),
+            "base_url": f"http://{os.getenv('USER_SERVICE_HOST', 'localhost')}:{os.getenv('USER_SERVICE_PORT', '8006')}"
+        }
+    }
+    
+    DATABASES = {
+        "postgresql": {
+            "host": os.getenv("POSTGRES_HOST", "localhost"),
+            "port": int(os.getenv("POSTGRES_PORT", "5432")),
+            "database": os.getenv("POSTGRES_DB", "fire_emergency"),
+            "username": os.getenv("POSTGRES_USER", "postgres"),
+            "password": os.getenv("POSTGRES_PASSWORD", "password"),
+            "url": f"postgresql://{os.getenv('POSTGRES_USER', 'postgres')}:{os.getenv('POSTGRES_PASSWORD', 'password')}@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'fire_emergency')}"
+        },
+        "redis": {
+            "host": os.getenv("REDIS_HOST", "localhost"),
+            "port": int(os.getenv("REDIS_PORT", "6379")),
+            "password": os.getenv("REDIS_PASSWORD"),
+            "db": int(os.getenv("REDIS_DB", "0")),
+            "url": f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/{os.getenv('REDIS_DB', '0')}"
+        },
+        "neo4j": {
+            "host": os.getenv("NEO4J_HOST", "localhost"),
+            "port": int(os.getenv("NEO4J_PORT", "7687")),
+            "username": os.getenv("NEO4J_USER", "neo4j"),
+            "password": os.getenv("NEO4J_PASSWORD", "password"),
+            "uri": f"bolt://{os.getenv('NEO4J_HOST', 'localhost')}:{os.getenv('NEO4J_PORT', '7687')}"
+        },
+        "chromadb": {
+            "host": os.getenv("CHROMA_HOST", "localhost"),
+            "port": int(os.getenv("CHROMA_PORT", "8007")),
+            "url": f"http://{os.getenv('CHROMA_HOST', 'localhost')}:{os.getenv('CHROMA_PORT', '8007')}"
+        },
+        "ollama": {
+            "host": os.getenv("OLLAMA_HOST", "localhost"),
+            "port": int(os.getenv("OLLAMA_PORT", "11434")),
+            "url": f"http://{os.getenv('OLLAMA_HOST', 'localhost')}:{os.getenv('OLLAMA_PORT', '11434')}"
+        }
+    }
+    
+    @classmethod
+    def get_service_url(cls, service_name: str) -> str:
+        """获取服务URL"""
+        if service_name not in cls.SERVICES:
+            raise ValueError(f"服务 {service_name} 不存在")
+        return cls.SERVICES[service_name]["base_url"]
+    
+    @classmethod
+    def get_database_config(cls, db_name: str) -> Dict[str, Any]:
+        """获取数据库配置"""
+        if db_name not in cls.DATABASES:
+            raise ValueError(f"数据库 {db_name} 不存在")
+        return cls.DATABASES[db_name]
+```
+
+### 统一环境变量配置
+```bash
+# .env.example - 统一环境变量配置
+
+# 服务端口配置
+EMERGENCY_SERVICE_HOST=localhost
+EMERGENCY_SERVICE_PORT=8000
+KNOWLEDGE_GRAPH_HOST=localhost
+KNOWLEDGE_GRAPH_PORT=8001
+RAG_SERVICE_HOST=localhost
+RAG_SERVICE_PORT=8002
+OLLAMA_SERVICE_HOST=localhost
+OLLAMA_SERVICE_PORT=8003
+CACHE_SERVICE_HOST=localhost
+CACHE_SERVICE_PORT=8004
+ADMIN_SERVICE_HOST=localhost
+ADMIN_SERVICE_PORT=8005
+USER_SERVICE_HOST=localhost
+USER_SERVICE_PORT=8006
+
+# 数据库配置
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=fire_emergency
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=password
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+NEO4J_HOST=localhost
+NEO4J_PORT=7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+
+CHROMA_HOST=localhost
+CHROMA_PORT=8007
+
+OLLAMA_HOST=localhost
+OLLAMA_PORT=11434
+
+# JWT配置
+JWT_SECRET_KEY=your-secret-key-here
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# 应用配置
+APP_NAME=Fire Emergency RAG System
+APP_VERSION=1.0.0
+DEBUG=True
+LOG_LEVEL=INFO
+
+# 安全配置
+SECRET_KEY=your-secret-key-here
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
+### 服务间通信配置
+```python
+# 在 shared/http_client.py 中定义统一的HTTP客户端
+import httpx
+from typing import Dict, Any, Optional
+from shared.service_registry import ServiceRegistry
+
+class ServiceClient:
+    """服务间通信客户端"""
+    
+    def __init__(self):
+        self.client = httpx.AsyncClient(timeout=30.0)
+    
+    async def call_service(
+        self, 
+        service_name: str, 
+        endpoint: str, 
+        method: str = "GET",
+        data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """调用其他服务"""
+        try:
+            service_url = ServiceRegistry.get_service_url(service_name)
+            url = f"{service_url}{endpoint}"
+            
+            response = await self.client.request(
+                method=method,
+                url=url,
+                json=data,
+                params=params
+            )
+            response.raise_for_status()
+            return response.json()
+            
+        except httpx.HTTPError as e:
+            raise ServiceCommunicationError(f"调用服务 {service_name} 失败: {str(e)}")
+        except Exception as e:
+            raise ServiceCommunicationError(f"服务调用异常: {str(e)}")
+    
+    async def close(self):
+        """关闭客户端"""
+        await self.client.aclose()
+
+class ServiceCommunicationError(Exception):
+    """服务通信异常"""
+    pass
+```
+
+这个统一配置管理文件解决了：
+1. ✅ 端口冲突问题
+2. ✅ 数据模型不一致问题  
+3. ✅ 配置管理分散问题
+4. ✅ 服务发现机制缺失问题
+5. ✅ 环境变量统一管理问题

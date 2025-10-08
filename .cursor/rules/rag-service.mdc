@@ -1,0 +1,618 @@
+---
+alwaysApply: false
+---
+# RAG服务模块 - 开发提示词
+
+## 模块概述
+RAG服务模块负责基于ChromaDB的向量检索和文档增强，通过语义相似度搜索找到相关的救援文档和案例，为救援方案生成提供丰富的上下文信息。
+
+## 技术栈
+- **向量数据库**: ChromaDB 0.4+
+- **嵌入模型**: sentence-transformers
+- **文本处理**: transformers + torch
+- **异步处理**: asyncio + httpx
+- **数据验证**: Pydantic
+
+## 核心职责
+1. 管理ChromaDB向量数据库连接
+2. 执行语义相似度搜索
+3. 检索相关救援文档和案例
+4. 提供上下文增强功能
+5. 管理文档向量化
+6. 优化检索结果排序
+
+## 数据模型定义
+
+### 文档模型
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+
+class Document(BaseModel):
+    """文档模型"""
+    id: str = Field(..., description="文档ID")
+    title: str = Field(..., description="文档标题")
+    content: str = Field(..., description="文档内容")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="元数据")
+    embedding: Optional[List[float]] = Field(None, description="向量嵌入")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
+
+class SearchQuery(BaseModel):
+    """搜索查询模型"""
+    query: str = Field(..., description="查询文本", min_length=1, max_length=500)
+    n_results: int = Field(default=5, description="返回结果数量", ge=1, le=20)
+    filter_metadata: Optional[Dict[str, Any]] = Field(None, description="元数据过滤")
+    similarity_threshold: float = Field(default=0.7, description="相似度阈值", ge=0.0, le=1.0)
+
+class SearchResult(BaseModel):
+    """搜索结果模型"""
+    document: Document
+    similarity_score: float = Field(..., description="相似度分数", ge=0.0, le=1.0)
+    rank: int = Field(..., description="排名")
+
+class EnhancedContext(BaseModel):
+    """增强上下文模型"""
+    original_query: str = Field(..., description="原始查询")
+    relevant_documents: List[SearchResult] = Field(..., description="相关文档")
+    enhanced_text: str = Field(..., description="增强后的文本")
+    confidence_score: float = Field(..., description="置信度分数", ge=0.0, le=1.0)
+```
+
+### 文档类型定义
+```python
+class RescueDocument(Document):
+    """救援文档"""
+    document_type: str = Field(default="rescue_procedure", description="文档类型")
+    priority: str = Field(..., description="优先级")
+    category: str = Field(..., description="分类")
+    tags: List[str] = Field(default_factory=list, description="标签")
+
+class CaseStudyDocument(Document):
+    """案例研究文档"""
+    document_type: str = Field(default="case_study", description="文档类型")
+    case_id: str = Field(..., description="案例ID")
+    outcome: str = Field(..., description="结果")
+    lessons_learned: List[str] = Field(default_factory=list, description="经验教训")
+
+class EquipmentGuideDocument(Document):
+    """设备指南文档"""
+    document_type: str = Field(default="equipment_guide", description="文档类型")
+    equipment_type: str = Field(..., description="设备类型")
+    usage_instructions: List[str] = Field(default_factory=list, description="使用说明")
+```
+
+## API接口规范
+
+### 1. 搜索文档
+```python
+@router.post("/search", response_model=List[SearchResult])
+async def search_documents(
+    query: SearchQuery,
+    current_user: User = Depends(get_current_user)
+) -> List[SearchResult]:
+    """
+    搜索相关文档
+    
+    Args:
+        query: 搜索查询
+        current_user: 当前用户
+        
+    Returns:
+        List[SearchResult]: 搜索结果列表
+        
+    Raises:
+        HTTPException: 400 - 查询参数无效
+        HTTPException: 500 - 搜索服务错误
+    """
+```
+
+### 2. 增强上下文
+```python
+@router.post("/enhance-context", response_model=EnhancedContext)
+async def enhance_context(
+    query: str,
+    knowledge_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user)
+) -> EnhancedContext:
+    """
+    增强上下文信息
+    
+    Args:
+        query: 原始查询
+        knowledge_data: 知识图谱数据
+        current_user: 当前用户
+        
+    Returns:
+        EnhancedContext: 增强后的上下文
+    """
+```
+
+### 3. 添加文档
+```python
+@router.post("/documents", response_model=Document)
+async def add_document(
+    document: Document,
+    current_user: User = Depends(get_current_user)
+) -> Document:
+    """
+    添加新文档
+    
+    Args:
+        document: 文档数据
+        current_user: 当前用户
+        
+    Returns:
+        Document: 添加的文档
+    """
+```
+
+### 4. 获取文档详情
+```python
+@router.get("/documents/{document_id}", response_model=Document)
+async def get_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user)
+) -> Document:
+    """
+    获取文档详情
+    
+    Args:
+        document_id: 文档ID
+        current_user: 当前用户
+        
+    Returns:
+        Document: 文档详情
+    """
+```
+
+## 核心服务类
+
+### RAG服务类
+```python
+import chromadb
+from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Any, Optional
+import asyncio
+import numpy as np
+
+class RAGService:
+    def __init__(self, chroma_host: str, chroma_port: int):
+        self.client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+        self.collection = self.client.get_or_create_collection(
+            name="fire_rescue_knowledge",
+            metadata={"description": "火灾救援知识库"}
+        )
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    async def search_documents(self, query: SearchQuery) -> List[SearchResult]:
+        """搜索相关文档"""
+        try:
+            # 生成查询向量
+            query_embedding = self.embedding_model.encode(query.query).tolist()
+            
+            # 执行向量搜索
+            search_results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=query.n_results,
+                where=query.filter_metadata,
+                include=["documents", "metadatas", "distances"]
+            )
+            
+            # 处理搜索结果
+            results = []
+            for i, (doc, metadata, distance) in enumerate(zip(
+                search_results['documents'][0],
+                search_results['metadatas'][0],
+                search_results['distances'][0]
+            )):
+                similarity_score = 1 - distance  # 转换为相似度分数
+                
+                if similarity_score >= query.similarity_threshold:
+                    document = Document(
+                        id=metadata.get('id', f'doc_{i}'),
+                        title=metadata.get('title', ''),
+                        content=doc,
+                        metadata=metadata
+                    )
+                    
+                    result = SearchResult(
+                        document=document,
+                        similarity_score=similarity_score,
+                        rank=i + 1
+                    )
+                    results.append(result)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"文档搜索失败: {str(e)}")
+            raise RAGServiceError(f"文档搜索失败: {str(e)}")
+    
+    async def enhance_context(
+        self, 
+        query: str, 
+        knowledge_data: Dict[str, Any]
+    ) -> EnhancedContext:
+        """增强上下文信息"""
+        try:
+            # 构建增强查询
+            enhanced_query = self._build_enhanced_query(query, knowledge_data)
+            
+            # 搜索相关文档
+            search_query = SearchQuery(
+                query=enhanced_query,
+                n_results=10,
+                similarity_threshold=0.6
+            )
+            
+            search_results = await self.search_documents(search_query)
+            
+            # 生成增强文本
+            enhanced_text = self._generate_enhanced_text(
+                query, knowledge_data, search_results
+            )
+            
+            # 计算置信度分数
+            confidence_score = self._calculate_confidence_score(search_results)
+            
+            return EnhancedContext(
+                original_query=query,
+                relevant_documents=search_results,
+                enhanced_text=enhanced_text,
+                confidence_score=confidence_score
+            )
+            
+        except Exception as e:
+            logger.error(f"上下文增强失败: {str(e)}")
+            raise RAGServiceError(f"上下文增强失败: {str(e)}")
+    
+    async def add_document(self, document: Document) -> Document:
+        """添加文档到向量数据库"""
+        try:
+            # 生成文档向量
+            embedding = self.embedding_model.encode(document.content).tolist()
+            
+            # 准备元数据
+            metadata = {
+                **document.metadata,
+                "id": document.id,
+                "title": document.title,
+                "created_at": document.created_at.isoformat(),
+                "updated_at": document.updated_at.isoformat()
+            }
+            
+            # 添加到ChromaDB
+            self.collection.add(
+                documents=[document.content],
+                embeddings=[embedding],
+                metadatas=[metadata],
+                ids=[document.id]
+            )
+            
+            # 更新文档的嵌入向量
+            document.embedding = embedding
+            
+            return document
+            
+        except Exception as e:
+            logger.error(f"添加文档失败: {str(e)}")
+            raise RAGServiceError(f"添加文档失败: {str(e)}")
+    
+    def _build_enhanced_query(self, query: str, knowledge_data: Dict[str, Any]) -> str:
+        """构建增强查询"""
+        # 从知识图谱数据中提取关键词
+        keywords = []
+        
+        if 'items' in knowledge_data:
+            for item in knowledge_data['items']:
+                keywords.extend([item.get('name', ''), item.get('material', '')])
+        
+        if 'environment' in knowledge_data:
+            env = knowledge_data['environment']
+            keywords.extend([env.get('type', ''), env.get('area', '')])
+        
+        # 组合查询
+        enhanced_query = f"{query} {' '.join(keywords)}"
+        return enhanced_query.strip()
+    
+    def _generate_enhanced_text(
+        self, 
+        query: str, 
+        knowledge_data: Dict[str, Any], 
+        search_results: List[SearchResult]
+    ) -> str:
+        """生成增强文本"""
+        # 提取相关文档内容
+        relevant_contents = []
+        for result in search_results[:5]:  # 取前5个最相关的结果
+            relevant_contents.append(result.document.content)
+        
+        # 组合知识图谱数据和文档内容
+        enhanced_parts = [f"原始查询: {query}"]
+        
+        if knowledge_data:
+            enhanced_parts.append(f"知识图谱数据: {knowledge_data}")
+        
+        if relevant_contents:
+            enhanced_parts.append(f"相关文档: {' '.join(relevant_contents)}")
+        
+        return "\n\n".join(enhanced_parts)
+    
+    def _calculate_confidence_score(self, search_results: List[SearchResult]) -> float:
+        """计算置信度分数"""
+        if not search_results:
+            return 0.0
+        
+        # 基于相似度分数计算置信度
+        scores = [result.similarity_score for result in search_results]
+        avg_score = sum(scores) / len(scores)
+        
+        # 考虑结果数量
+        quantity_factor = min(len(scores) / 5, 1.0)
+        
+        return avg_score * quantity_factor
+```
+
+## 文档管理
+
+### 文档预处理
+```python
+class DocumentPreprocessor:
+    def __init__(self):
+        self.text_cleaner = TextCleaner()
+        self.text_splitter = TextSplitter()
+    
+    def preprocess_document(self, document: Document) -> Document:
+        """预处理文档"""
+        # 清理文本
+        cleaned_content = self.text_cleaner.clean(document.content)
+        
+        # 分割长文档
+        if len(cleaned_content) > 1000:
+            chunks = self.text_splitter.split(cleaned_content, chunk_size=500)
+            # 处理分块文档
+            processed_chunks = []
+            for i, chunk in enumerate(chunks):
+                chunk_doc = Document(
+                    id=f"{document.id}_chunk_{i}",
+                    title=f"{document.title} - 第{i+1}部分",
+                    content=chunk,
+                    metadata={**document.metadata, "chunk_index": i}
+                )
+                processed_chunks.append(chunk_doc)
+            return processed_chunks
+        else:
+            document.content = cleaned_content
+            return document
+
+class TextCleaner:
+    def clean(self, text: str) -> str:
+        """清理文本"""
+        import re
+        # 移除多余空白
+        text = re.sub(r'\s+', ' ', text)
+        # 移除特殊字符
+        text = re.sub(r'[^\w\s\u4e00-\u9fff]', '', text)
+        return text.strip()
+
+class TextSplitter:
+    def split(self, text: str, chunk_size: int = 500) -> List[str]:
+        """分割文本"""
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_length = 0
+        
+        for word in words:
+            if current_length + len(word) > chunk_size and current_chunk:
+                chunks.append(' '.join(current_chunk))
+                current_chunk = [word]
+                current_length = len(word)
+            else:
+                current_chunk.append(word)
+                current_length += len(word) + 1
+        
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+        
+        return chunks
+```
+
+## 性能优化
+
+### 1. 向量缓存
+```python
+class VectorCache:
+    def __init__(self, redis_client):
+        self.redis = redis_client
+        self.cache_ttl = 3600  # 1小时
+    
+    async def get_embedding(self, text: str) -> Optional[List[float]]:
+        """获取缓存的向量"""
+        cache_key = f"embedding:{hash(text)}"
+        cached = await self.redis.get(cache_key)
+        if cached:
+            return json.loads(cached)
+        return None
+    
+    async def set_embedding(self, text: str, embedding: List[float]):
+        """缓存向量"""
+        cache_key = f"embedding:{hash(text)}"
+        await self.redis.setex(
+            cache_key, 
+            self.cache_ttl, 
+            json.dumps(embedding)
+        )
+```
+
+### 2. 批量处理
+```python
+class BatchProcessor:
+    def __init__(self, rag_service, batch_size: int = 10):
+        self.rag_service = rag_service
+        self.batch_size = batch_size
+    
+    async def batch_add_documents(self, documents: List[Document]) -> List[Document]:
+        """批量添加文档"""
+        results = []
+        for i in range(0, len(documents), self.batch_size):
+            batch = documents[i:i + self.batch_size]
+            batch_results = await asyncio.gather(
+                *[self.rag_service.add_document(doc) for doc in batch]
+            )
+            results.extend(batch_results)
+        return results
+```
+
+### 3. 查询优化
+```python
+class QueryOptimizer:
+    def __init__(self):
+        self.stop_words = set(['的', '了', '在', '是', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这'])
+    
+    def optimize_query(self, query: str) -> str:
+        """优化查询"""
+        # 移除停用词
+        words = query.split()
+        filtered_words = [word for word in words if word not in self.stop_words]
+        
+        # 去重
+        unique_words = list(dict.fromkeys(filtered_words))
+        
+        return ' '.join(unique_words)
+```
+
+## 错误处理
+
+### 自定义异常类
+```python
+class RAGServiceError(Exception):
+    """RAG服务异常"""
+    pass
+
+class DocumentNotFoundError(RAGServiceError):
+    """文档未找到异常"""
+    pass
+
+class EmbeddingError(RAGServiceError):
+    """向量化异常"""
+    pass
+
+class SearchError(RAGServiceError):
+    """搜索异常"""
+    pass
+```
+
+### 错误处理中间件
+```python
+@app.exception_handler(RAGServiceError)
+async def rag_service_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "RAG Service Error",
+            "message": str(exc),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+```
+
+## 监控和日志
+
+### 性能监控
+```python
+import time
+from prometheus_client import Histogram, Counter
+
+SEARCH_DURATION = Histogram('rag_search_duration_seconds', 'Search duration')
+SEARCH_COUNT = Counter('rag_searches_total', 'Total searches')
+EMBEDDING_COUNT = Counter('rag_embeddings_total', 'Total embeddings')
+
+class MonitoredRAGService(RAGService):
+    async def search_documents(self, query: SearchQuery) -> List[SearchResult]:
+        start_time = time.time()
+        SEARCH_COUNT.inc()
+        
+        try:
+            result = await super().search_documents(query)
+            return result
+        finally:
+            SEARCH_DURATION.observe(time.time() - start_time)
+```
+
+## 测试要求
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock
+
+class TestRAGService:
+    @pytest.fixture
+    def mock_chroma_client(self):
+        client = Mock()
+        collection = Mock()
+        client.get_or_create_collection.return_value = collection
+        return client, collection
+    
+    @pytest.mark.asyncio
+    async def test_search_documents(self, mock_chroma_client):
+        client, collection = mock_chroma_client
+        service = RAGService("localhost", 8000)
+        service.client = client
+        service.collection = collection
+        
+        # 模拟搜索结果
+        collection.query.return_value = {
+            'documents': [['测试文档内容']],
+            'metadatas': [[{'id': 'doc1', 'title': '测试文档'}]],
+            'distances': [[0.1]]
+        }
+        
+        query = SearchQuery(query="测试查询", n_results=5)
+        results = await service.search_documents(query)
+        
+        assert len(results) == 1
+        assert results[0].similarity_score == 0.9
+```
+
+## 部署配置
+
+### 环境变量
+```bash
+# ChromaDB配置
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+CHROMA_COLLECTION_NAME=fire_rescue_knowledge
+
+# 嵌入模型配置
+EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
+EMBEDDING_CACHE_SIZE=1000
+EMBEDDING_CACHE_TTL=3600
+
+# 性能配置
+MAX_SEARCH_RESULTS=20
+DEFAULT_SIMILARITY_THRESHOLD=0.7
+BATCH_SIZE=10
+```
+
+### Docker配置
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# 下载嵌入模型
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+COPY . .
+EXPOSE 8002
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+```
+
+这个提示词文件提供了RAG服务模块的完整开发指南，包括向量搜索、文档管理、上下文增强、性能优化等各个方面，确保开发人员能够顺利实现该模块。
