@@ -1,0 +1,5 @@
+{
+  "models": "D:\\Fire Emergency RAG System\\models",
+  "host": "http://localhost:11434",
+  "timeout": 120
+}

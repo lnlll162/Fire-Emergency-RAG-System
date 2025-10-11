@@ -3,7 +3,7 @@
 定义系统中所有服务使用的统一数据模型
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
@@ -88,13 +88,15 @@ class Item(BaseModel):
     size: Optional[Dict[str, Any]] = Field(None, description="尺寸信息")
     weight: Optional[Dict[str, Any]] = Field(None, description="重量信息")
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if not v.strip():
             raise ValueError('物品名称不能为空')
         return v.strip()
     
-    @validator('location')
+    @field_validator('location')
+    @classmethod
     def validate_location(cls, v):
         if not v.strip():
             raise ValueError('位置不能为空')
@@ -122,7 +124,8 @@ class RescueStep(BaseModel):
     warnings: List[str] = Field(default_factory=list, description="注意事项")
     estimated_time: Optional[int] = Field(None, description="预计时间(分钟)", ge=1, le=1440)
     
-    @validator('description')
+    @field_validator('description')
+    @classmethod
     def validate_description(cls, v):
         if not v.strip():
             raise ValueError('步骤描述不能为空')
@@ -135,20 +138,22 @@ class RescuePlan(BaseModel):
     title: str = Field(..., description="方案标题", min_length=1, max_length=200)
     priority: PriorityLevel = Field(..., description="优先级")
     status: str = Field(default="active", description="状态")
-    steps: List[RescueStep] = Field(..., description="救援步骤", min_items=1)
+    steps: List[RescueStep] = Field(..., description="救援步骤", min_length=1)
     equipment_list: List[str] = Field(..., description="设备清单")
     warnings: List[str] = Field(..., description="总体警告")
     estimated_duration: int = Field(..., description="预计总时长(分钟)", ge=1, le=1440)
     created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
     
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def validate_title(cls, v):
         if not v.strip():
             raise ValueError('方案标题不能为空')
         return v.strip()
     
-    @validator('steps')
+    @field_validator('steps')
+    @classmethod
     def validate_steps(cls, v):
         if not v:
             raise ValueError('救援步骤不能为空')
@@ -161,14 +166,15 @@ class RescuePlan(BaseModel):
 
 class RescuePlanRequest(BaseModel):
     """统一救援方案请求模型"""
-    items: List[Item] = Field(..., description="物品列表", min_items=1, max_items=50)
+    items: List[Item] = Field(..., description="物品列表", min_length=1, max_length=50)
     environment: Environment = Field(..., description="环境信息")
     additional_info: Optional[str] = Field(None, description="附加信息", max_length=1000)
     urgency_level: str = Field(default="中", description="紧急程度")
     contact_info: Optional[Dict[str, Any]] = Field(None, description="联系信息")
     user_id: Optional[str] = Field(None, description="用户ID")
     
-    @validator('items')
+    @field_validator('items')
+    @classmethod
     def validate_items(cls, v):
         if not v:
             raise ValueError('物品列表不能为空')
@@ -179,7 +185,7 @@ class User(BaseModel):
     """用户模型"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="用户ID")
     username: str = Field(..., description="用户名", min_length=3, max_length=50)
-    email: str = Field(..., description="邮箱", regex=r'^[^@]+@[^@]+\.[^@]+$')
+    email: str = Field(..., description="邮箱", pattern=r'^[^@]+@[^@]+\.[^@]+$')
     full_name: Optional[str] = Field(None, description="全名", max_length=100)
     role: str = Field(default="user", description="角色")
     is_active: bool = Field(default=True, description="是否激活")
@@ -245,8 +251,12 @@ class PaginatedResponse(BaseModel):
     size: int = Field(..., description="每页大小")
     pages: int = Field(..., description="总页数")
     
-    @validator('pages', always=True)
-    def calculate_pages(cls, v, values):
+    @field_validator('pages', mode='before')
+    @classmethod
+    def calculate_pages(cls, v, info):
+        if v is not None:
+            return v
+        values = info.data
         total = values.get('total', 0)
         size = values.get('size', 10)
         return (total + size - 1) // size if total > 0 else 0

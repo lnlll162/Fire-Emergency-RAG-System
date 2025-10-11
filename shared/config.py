@@ -5,7 +5,7 @@
 
 import os
 from typing import Optional, Dict, Any, List
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from shared.service_registry import ServiceRegistry
 
@@ -45,7 +45,7 @@ class DatabaseConfig(BaseSettings):
     # Ollama配置
     ollama_host: str = Field(default="localhost", env="OLLAMA_HOST")
     ollama_port: int = Field(default=11434, env="OLLAMA_PORT")
-    ollama_model: str = Field(default="qwen2.5:7b", env="OLLAMA_MODEL")
+    ollama_model: str = Field(default="qwen2.5:1.5b", env="OLLAMA_MODEL")
     ollama_timeout: int = Field(default=120, env="OLLAMA_TIMEOUT")
     
     @property
@@ -63,12 +63,12 @@ class DatabaseConfig(BaseSettings):
         return f"bolt://{self.neo4j_host}:{self.neo4j_port}"
     
     @property
-    def chroma_url(self) -> str:
-        return f"http://{self.chroma_host}:{self.chroma_port}"
-    
-    @property
     def ollama_url(self) -> str:
         return f"http://{self.ollama_host}:{self.ollama_port}"
+    
+    @property
+    def chroma_url(self) -> str:
+        return f"http://{self.chroma_host}:{self.chroma_port}"
 
 
 class SecurityConfig(BaseSettings):
@@ -102,7 +102,8 @@ class SecurityConfig(BaseSettings):
         }
     )
     
-    @validator('cors_origins', pre=True)
+    @field_validator('cors_origins', mode='before')
+    @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(',')]
@@ -126,7 +127,8 @@ class LoggingConfig(BaseSettings):
     structured_logging: bool = Field(default=True, env="STRUCTURED_LOGGING")
     log_json_format: bool = Field(default=False, env="LOG_JSON_FORMAT")
     
-    @validator('log_level')
+    @field_validator('log_level')
+    @classmethod
     def validate_log_level(cls, v):
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if v.upper() not in valid_levels:
@@ -203,7 +205,8 @@ class AppConfig(BaseSettings):
     reload: bool = Field(default=False, env="RELOAD")
     workers: int = Field(default=1, env="WORKERS")
     
-    @validator('environment')
+    @field_validator('environment')
+    @classmethod
     def validate_environment(cls, v):
         valid_envs = ["development", "testing", "staging", "production"]
         if v not in valid_envs:

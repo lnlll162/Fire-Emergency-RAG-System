@@ -1,0 +1,45 @@
+# 应急服务 Dockerfile
+FROM python:3.13-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制依赖文件
+COPY requirements-py313.txt .
+
+# 安装Python依赖
+RUN pip install --no-cache-dir -r requirements-py313.txt
+
+# 复制项目文件
+COPY shared/ ./shared/
+COPY backend/services/emergency_service.py ./backend/services/
+COPY backend/services/rag_service.py ./backend/services/
+COPY backend/services/knowledge_graph_service.py ./backend/services/
+COPY backend/services/ollama_service.py ./backend/services/
+COPY backend/services/cache_service.py ./backend/services/
+
+# 创建非root用户
+RUN useradd --create-home --shell /bin/bash app && \
+    chown -R app:app /app
+USER app
+
+# 暴露端口
+EXPOSE 8000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5.0)"
+
+# 启动命令
+CMD ["python", "backend/services/emergency_service.py"]

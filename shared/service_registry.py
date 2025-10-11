@@ -36,9 +36,9 @@ class ServiceRegistry:
         },
         "rag_service": {
             "host": os.getenv("RAG_SERVICE_HOST", "localhost"),
-            "port": int(os.getenv("RAG_SERVICE_PORT", "3000")),
-            "base_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '3000')}",
-            "health_check_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '3000')}/health"
+            "port": int(os.getenv("RAG_SERVICE_PORT", "8008")),
+            "base_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '8008')}",
+            "health_check_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '8008')}/health"
         },
         "ollama_service": {
             "host": os.getenv("OLLAMA_SERVICE_HOST", "localhost"),

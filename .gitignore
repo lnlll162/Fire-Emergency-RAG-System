@@ -21,9 +21,31 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
-venv/
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.env
+.venv
 env/
+venv/
 ENV/
 env.bak/
 venv.bak/
@@ -44,60 +66,9 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Logs
+# Project specific
+models/blobs/
 *.log
-logs/
-
-# Database
-*.db
-*.sqlite3
-
-# Model cache
-models/embeddings/
-backend/services/models/embeddings/
-*.pkl
-*.joblib
-
-# Test reports
-integration_test_report_*.json
+reports/*.json
 test_*.py
-*_test.py
-
-# Temporary files
-*.tmp
-*.temp
-temp/
-tmp/
-
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Node.js (for future frontend)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Docker
-.dockerignore
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Coverage reports
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+test_*.json

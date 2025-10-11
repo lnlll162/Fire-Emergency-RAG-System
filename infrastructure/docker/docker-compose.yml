@@ -1,0 +1,242 @@
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: fire_emergency_postgres
+    environment:
+      POSTGRES_DB: fire_emergency
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c log_statement=all
+      -c log_destination=stderr
+      -c logging_collector=on
+      -c log_min_messages=info
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: fire_emergency_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # Neo4j知识图谱
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: fire_emergency_neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ChromaDB向量数据库
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: fire_emergency_chromadb
+    ports:
+      - "8007:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    networks:
+      - fire_emergency_network
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Ollama AI服务
+  ollama:
+    image: ollama/ollama:latest
+    container_name: fire_emergency_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ../../models:/models
+    networks:
+      - fire_emergency_network
+    environment:
+      - OLLAMA_MODELS=/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # 知识图谱服务
+  knowledge_graph_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.knowledge_graph_service
+    container_name: fire_emergency_kg_service
+    ports:
+      - "8001:8001"
+    environment:
+      - NEO4J_HOST=neo4j
+      - NEO4J_PORT=7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password
+    depends_on:
+      - neo4j
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # RAG服务
+  rag_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.rag_service
+    container_name: fire_emergency_rag_service
+    ports:
+      - "3000:3000"
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - chromadb
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Ollama服务
+  ollama_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.ollama_service
+    container_name: fire_emergency_ollama_service
+    ports:
+      - "8003:8003"
+    environment:
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - ollama
+      - redis
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # 缓存服务
+  cache_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.cache_service
+    container_name: fire_emergency_cache_service
+    ports:
+      - "8004:8004"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # 应急服务
+  emergency_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.emergency_service
+    container_name: fire_emergency_emergency_service
+    ports:
+      - "8000:8000"
+    environment:
+      - KNOWLEDGE_GRAPH_HOST=knowledge_graph_service
+      - KNOWLEDGE_GRAPH_PORT=8001
+      - RAG_HOST=rag_service
+      - RAG_PORT=3000
+      - OLLAMA_HOST=ollama_service
+      - OLLAMA_PORT=8003
+      - CACHE_HOST=cache_service
+      - CACHE_PORT=8004
+    depends_on:
+      - knowledge_graph_service
+      - rag_service
+      - ollama_service
+      - cache_service
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  neo4j_data:
+  neo4j_logs:
+  chromadb_data:
+  ollama_data:
+
+networks:
+  fire_emergency_network:
+    driver: bridge
