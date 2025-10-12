@@ -36,9 +36,9 @@ class ServiceRegistry:
         },
         "rag_service": {
             "host": os.getenv("RAG_SERVICE_HOST", "localhost"),
-            "port": int(os.getenv("RAG_SERVICE_PORT", "8008")),
-            "base_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '8008')}",
-            "health_check_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '8008')}/health"
+            "port": int(os.getenv("RAG_SERVICE_PORT", "3000")),
+            "base_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '3000')}",
+            "health_check_url": f"http://{os.getenv('RAG_SERVICE_HOST', 'localhost')}:{os.getenv('RAG_SERVICE_PORT', '3000')}/health"
         },
         "ollama_service": {
             "host": os.getenv("OLLAMA_SERVICE_HOST", "localhost"),
@@ -60,9 +60,15 @@ class ServiceRegistry:
         },
         "user_service": {
             "host": os.getenv("USER_SERVICE_HOST", "localhost"),
-            "port": int(os.getenv("USER_SERVICE_PORT", "8006")),
-            "base_url": f"http://{os.getenv('USER_SERVICE_HOST', 'localhost')}:{os.getenv('USER_SERVICE_PORT', '8006')}",
-            "health_check_url": f"http://{os.getenv('USER_SERVICE_HOST', 'localhost')}:{os.getenv('USER_SERVICE_PORT', '8006')}/health"
+            "port": int(os.getenv("USER_SERVICE_PORT", "8002")),
+            "base_url": f"http://{os.getenv('USER_SERVICE_HOST', 'localhost')}:{os.getenv('USER_SERVICE_PORT', '8002')}",
+            "health_check_url": f"http://{os.getenv('USER_SERVICE_HOST', 'localhost')}:{os.getenv('USER_SERVICE_PORT', '8002')}/health"
+        },
+        "admin_service": {
+            "host": os.getenv("ADMIN_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("ADMIN_SERVICE_PORT", "8005")),
+            "base_url": f"http://{os.getenv('ADMIN_SERVICE_HOST', 'localhost')}:{os.getenv('ADMIN_SERVICE_PORT', '8005')}",
+            "health_check_url": f"http://{os.getenv('ADMIN_SERVICE_HOST', 'localhost')}:{os.getenv('ADMIN_SERVICE_PORT', '8005')}/health"
         }
     }
     

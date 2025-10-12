@@ -199,6 +199,76 @@ services:
       timeout: 10s
       retries: 5
 
+  # 用户服务
+  user_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.user_service
+    container_name: fire_emergency_user_service
+    ports:
+      - "8002:8002"
+    environment:
+      - USER_SERVICE_HOST=user_service
+      - USER_SERVICE_PORT=8002
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=fire_emergency
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - JWT_SECRET_KEY=your-secret-key-here-change-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # 管理服务
+  admin_service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/services/Dockerfile.admin_service
+    container_name: fire_emergency_admin_service
+    ports:
+      - "8005:8005"
+    environment:
+      - ADMIN_SERVICE_HOST=admin_service
+      - ADMIN_SERVICE_PORT=8005
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=fire_emergency
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - NEO4J_HOST=neo4j
+      - NEO4J_PORT=7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - redis
+      - postgres
+      - neo4j
+      - chromadb
+    networks:
+      - fire_emergency_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   # 应急服务
   emergency_service:
     build:
@@ -216,11 +286,14 @@ services:
       - OLLAMA_PORT=8003
       - CACHE_HOST=cache_service
       - CACHE_PORT=8004
+      - USER_HOST=user_service
+      - USER_PORT=8002
     depends_on:
       - knowledge_graph_service
       - rag_service
       - ollama_service
       - cache_service
+      - user_service
     networks:
       - fire_emergency_network
     healthcheck:

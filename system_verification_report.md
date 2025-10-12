@@ -1,19 +1,19 @@
 # 系统状态验证报告
-验证时间: 2025-10-11 20:29:48
+验证时间: 2025-10-12 23:44:58
 
 ## 服务状态
-- [OK] 应急服务: healthy
-  - 响应时间: 2252.7ms
-- [OK] 知识图谱服务: healthy
-  - 响应时间: 267.0ms
-- [OK] Ollama服务: healthy
-  - 响应时间: 555.0ms
-- [OK] 缓存服务: healthy
-  - 响应时间: 259.5ms
-- [OK] RAG服务: healthy
-  - 响应时间: 261.8ms
+- [X] 应急服务: unreachable
+  - 错误: All connection attempts failed
+- [X] 知识图谱服务: unreachable
+  - 错误: All connection attempts failed
+- [X] Ollama服务: unreachable
+  - 错误: All connection attempts failed
+- [X] 缓存服务: unreachable
+  - 错误: All connection attempts failed
+- [X] RAG服务: unreachable
+  - 错误: All connection attempts failed
 
 ## 系统统计
-- 健康服务: 5/5
-- 系统可用性: 100.0%
-- 状态: [SUCCESS] 完全健康
+- 健康服务: 0/5
+- 系统可用性: 0.0%
+- 状态: [ERROR] 不可用

@@ -1,0 +1,36 @@
+# 管理服务 Dockerfile
+FROM python:3.11-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制依赖文件
+COPY requirements-py313.txt .
+
+# 安装Python依赖
+RUN pip install --no-cache-dir -r requirements-py313.txt
+
+# 复制应用代码
+COPY . .
+
+# 设置环境变量
+ENV PYTHONPATH=/app
+ENV ADMIN_SERVICE_HOST=0.0.0.0
+ENV ADMIN_SERVICE_PORT=8005
+
+# 暴露端口
+EXPOSE 8005
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8005/health || exit 1
+
+# 启动命令
+CMD ["python", "scripts/start_admin_service.py"]
