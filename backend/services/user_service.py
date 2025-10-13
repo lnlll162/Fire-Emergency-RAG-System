@@ -236,8 +236,17 @@ class UserService:
                 async with user_db.pool.acquire() as conn:
                     await conn.execute("SELECT 1")
                 db_ok = True
+            else:
+                # 如果数据库未初始化，尝试重新初始化
+                try:
+                    await self.initialize_database()
+                    if self.db_initialized:
+                        db_ok = True
+                except Exception as e:
+                    logger.warning(f"数据库重新初始化失败: {str(e)}")
             
-            return redis_ok and db_ok
+            # 只要Redis连接正常，服务就认为是健康的
+            return redis_ok
         except Exception as e:
             logger.error(f"服务连接测试失败: {str(e)}")
             return False

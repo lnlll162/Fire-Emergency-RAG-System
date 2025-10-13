@@ -239,7 +239,7 @@ class EmergencyService:
         try:
             await self._call_service("cache", "/set", "POST", {
                 "key": cache_key,
-                "value": rescue_plan.model_dump(),
+                "value": rescue_plan.model_dump(mode='json'),
                 "ttl": ttl
             })
         except Exception as e:

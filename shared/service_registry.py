@@ -69,6 +69,12 @@ class ServiceRegistry:
             "port": int(os.getenv("ADMIN_SERVICE_PORT", "8005")),
             "base_url": f"http://{os.getenv('ADMIN_SERVICE_HOST', 'localhost')}:{os.getenv('ADMIN_SERVICE_PORT', '8005')}",
             "health_check_url": f"http://{os.getenv('ADMIN_SERVICE_HOST', 'localhost')}:{os.getenv('ADMIN_SERVICE_PORT', '8005')}/health"
+        },
+        "user_input_service": {
+            "host": os.getenv("USER_INPUT_SERVICE_HOST", "localhost"),
+            "port": int(os.getenv("USER_INPUT_SERVICE_PORT", "8006")),
+            "base_url": f"http://{os.getenv('USER_INPUT_SERVICE_HOST', 'localhost')}:{os.getenv('USER_INPUT_SERVICE_PORT', '8006')}",
+            "health_check_url": f"http://{os.getenv('USER_INPUT_SERVICE_HOST', 'localhost')}:{os.getenv('USER_INPUT_SERVICE_PORT', '8006')}/health"
         }
     }
     

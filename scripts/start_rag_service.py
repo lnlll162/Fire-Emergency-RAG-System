@@ -50,7 +50,7 @@ def main():
     
     # 启动服务
     host = os.getenv("RAG_SERVICE_HOST", "0.0.0.0")
-    port = int(os.getenv("RAG_SERVICE_PORT", "8008"))  # 修改为8008端口避免冲突
+    port = int(os.getenv("RAG_SERVICE_PORT", "3000"))  # 使用标准端口3000
     
     logger.info(f"RAG服务启动在 http://{host}:{port}")
     logger.info(f"API文档: http://{host}:{port}/docs")

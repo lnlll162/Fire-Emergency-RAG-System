@@ -51,8 +51,16 @@ class UserDatabase:
             self.pool = await asyncpg.create_pool(
                 self._connection_string,
                 min_size=1,
-                max_size=10,
-                command_timeout=30
+                max_size=3,  # 进一步减少连接数
+                command_timeout=5,  # 减少超时时间
+                server_settings={
+                    'application_name': 'fire_emergency_user_service',
+                    'client_encoding': 'utf8',  # 明确指定编码
+                },
+                # 添加连接池配置
+                max_queries=50000,
+                max_inactive_connection_lifetime=300.0,  # 5分钟
+                setup=self._setup_connection  # 添加连接设置
             )
             logger.info("数据库连接池初始化成功")
             
@@ -64,6 +72,18 @@ class UserDatabase:
         except Exception as e:
             logger.error(f"数据库初始化失败: {str(e)}")
             raise DatabaseError(f"数据库初始化失败: {str(e)}", "user_service")
+    
+    async def _setup_connection(self, conn):
+        """设置连接参数"""
+        try:
+            # 设置连接超时
+            await conn.execute("SET statement_timeout = '5s'")
+            # 设置空闲超时
+            await conn.execute("SET idle_in_transaction_session_timeout = '30s'")
+            # 设置连接编码
+            await conn.execute("SET client_encoding = 'utf8'")
+        except Exception as e:
+            logger.warning(f"连接设置失败: {str(e)}")
     
     async def close(self):
         """关闭数据库连接池"""

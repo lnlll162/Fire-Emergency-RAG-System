@@ -16,7 +16,7 @@ sys.path.append(str(project_root))
 
 def start_user_service():
     """启动用户服务"""
-    print("🚀 启动用户服务...")
+    print("启动用户服务...")
     
     # 设置环境变量
     env = os.environ.copy()
@@ -43,22 +43,22 @@ def start_user_service():
             text=True
         )
         
-        print(f"✅ 用户服务已启动 (PID: {process.pid})")
-        print(f"📍 服务地址: http://localhost:8002")
-        print(f"📚 API文档: http://localhost:8002/docs")
+        print(f"用户服务已启动 (PID: {process.pid})")
+        print(f"服务地址: http://localhost:8002")
+        print(f"API文档: http://localhost:8002/docs")
         print("按 Ctrl+C 停止服务")
         
         # 等待进程结束
         try:
             process.wait()
         except KeyboardInterrupt:
-            print("\n🛑 正在停止用户服务...")
+            print("\n正在停止用户服务...")
             process.terminate()
             process.wait()
-            print("✅ 用户服务已停止")
+            print("用户服务已停止")
             
     except Exception as e:
-        print(f"❌ 启动用户服务失败: {str(e)}")
+        print(f"启动用户服务失败: {str(e)}")
         return False
     
     return True
