@@ -152,7 +152,7 @@ class ServiceManager:
                         timeout=5
                     )
                     if result.returncode == 0:
-                        print(f"  ✅ {service['name']} 启动成功")
+                        print(f"  [OK] {service['name']} 启动成功")
                         return True
                 else:
                     # Python服务健康检查
@@ -163,25 +163,25 @@ class ServiceManager:
                         timeout=5
                     )
                     if result.returncode == 0:
-                        print(f"  ✅ {service['name']} 启动成功")
+                        print(f"  [OK] {service['name']} 启动成功")
                         return True
             except Exception as e:
                 pass
             
             time.sleep(2)
         
-        print(f"  ❌ {service['name']} 启动超时")
+        print(f"  [ERROR] {service['name']} 启动超时")
         return False
     
     def start_service(self, service_name: str) -> bool:
         """启动单个服务"""
         service = self.services[service_name]
         
-        print(f"🚀 启动 {service['name']}...")
+        print(f"[START] 启动 {service['name']}...")
         
         # 检查端口是否被占用
         if not self.check_port_available(service["port"]):
-            print(f"  ⚠️  端口 {service['port']} 已被占用，跳过启动")
+            print(f"  [WARNING] 端口 {service['port']} 已被占用，跳过启动")
             return True
         
         try:
@@ -194,10 +194,10 @@ class ServiceManager:
                     timeout=30
                 )
                 if result.returncode == 0:
-                    print(f"  ✅ {service['name']} Docker容器启动成功")
+                    print(f"  [OK] {service['name']} Docker容器启动成功")
                     return self.wait_for_service(service_name)
                 else:
-                    print(f"  ❌ {service['name']} Docker容器启动失败: {result.stderr}")
+                    print(f"  [ERROR] {service['name']} Docker容器启动失败: {result.stderr}")
                     return False
             else:
                 # 启动Python服务
@@ -208,11 +208,11 @@ class ServiceManager:
                     text=True
                 )
                 self.running_processes[service_name] = process
-                print(f"  ✅ {service['name']} 进程启动成功 (PID: {process.pid})")
+                print(f"  [OK] {service['name']} 进程启动成功 (PID: {process.pid})")
                 return self.wait_for_service(service_name)
         
         except Exception as e:
-            print(f"  ❌ {service['name']} 启动失败: {str(e)}")
+            print(f"  [ERROR] {service['name']} 启动失败: {str(e)}")
             return False
     
     def start_all_services(self) -> bool:
@@ -229,27 +229,27 @@ class ServiceManager:
             if "depends_on" in service:
                 for dep in service["depends_on"]:
                     if dep not in self.running_processes and dep not in ["redis", "postgres", "neo4j", "chromadb", "ollama"]:
-                        print(f"  ⚠️  {service['name']} 的依赖 {dep} 未启动，跳过")
+                        print(f"  [WARNING] {service['name']} 的依赖 {dep} 未启动，跳过")
                         continue
             
             if self.start_service(service_name):
                 success_count += 1
             else:
-                print(f"  ❌ {service['name']} 启动失败，停止后续服务启动")
+                print(f"  [ERROR] {service['name']} 启动失败，停止后续服务启动")
                 break
         
         print("\n" + "=" * 60)
-        print(f"📊 启动结果: {success_count}/{total_services} 个服务启动成功")
+        print(f"[INFO] 启动结果: {success_count}/{total_services} 个服务启动成功")
         
         if success_count == total_services:
-            print("✅ 所有服务启动成功！")
+            print("[SUCCESS] 所有服务启动成功！")
             print("\n🌐 服务访问地址:")
             for service_name, service in self.services.items():
                 if service_name in self.running_processes or service_name in ["redis", "postgres", "neo4j", "chromadb", "ollama"]:
                     print(f"  {service['name']}: http://localhost:{service['port']}")
             return True
         else:
-            print("❌ 部分服务启动失败！")
+            print("[ERROR] 部分服务启动失败！")
             return False
     
     def stop_all_services(self):
@@ -262,9 +262,9 @@ class ServiceManager:
                 print(f"  停止 {service_name}...")
                 process.terminate()
                 process.wait(timeout=10)
-                print(f"  ✅ {service_name} 已停止")
+                print(f"  [OK] {service_name} 已停止")
             except Exception as e:
-                print(f"  ❌ 停止 {service_name} 失败: {str(e)}")
+                print(f"  [ERROR] 停止 {service_name} 失败: {str(e)}")
         
         # 停止Docker服务
         docker_services = ["fire_emergency_redis", "fire_emergency_postgres", 
@@ -278,13 +278,13 @@ class ServiceManager:
                              capture_output=True, timeout=10)
                 subprocess.run(["docker", "rm", container_name], 
                              capture_output=True, timeout=10)
-                print(f"  ✅ {container_name} 已停止")
+                print(f"  [OK] {container_name} 已停止")
             except Exception as e:
-                print(f"  ❌ 停止 {container_name} 失败: {str(e)}")
+                print(f"  [ERROR] 停止 {container_name} 失败: {str(e)}")
     
     def run_health_check(self):
         """运行健康检查"""
-        print("\n🔍 运行系统健康检查...")
+        print("\n[CHECK] 运行系统健康检查...")
         
         import asyncio
         from tests.test_system_integration import SystemIntegrationTest
@@ -296,13 +296,13 @@ class ServiceManager:
             healthy_count = sum(1 for result in health_results.values() if result["status"] == "healthy")
             total_count = len(health_results)
             
-            print(f"📊 健康检查结果: {healthy_count}/{total_count} 个服务健康")
+            print(f"[INFO] 健康检查结果: {healthy_count}/{total_count} 个服务健康")
             
             if healthy_count == total_count:
-                print("✅ 所有服务健康！")
+                print("[SUCCESS] 所有服务健康！")
                 return True
             else:
-                print("❌ 部分服务不健康！")
+                print("[ERROR] 部分服务不健康！")
                 return False
         
         return asyncio.run(check_health())
@@ -325,12 +325,12 @@ def main():
     try:
         # 启动所有服务
         if manager.start_all_services():
-            print("\n🎉 系统启动完成！")
+            print("\n[SUCCESS] 系统启动完成！")
             
             # 运行健康检查
             if manager.run_health_check():
-                print("\n✅ 系统健康检查通过！")
-                print("\n📝 使用说明:")
+                print("\n[SUCCESS] 系统健康检查通过！")
+                print("\n[INFO] 使用说明:")
                 print("  - 按 Ctrl+C 停止所有服务")
                 print("  - 访问 http://localhost:8000 查看应急服务")
                 print("  - 访问 http://localhost:8001 查看用户服务")
@@ -347,9 +347,9 @@ def main():
                 except KeyboardInterrupt:
                     pass
             else:
-                print("\n❌ 系统健康检查失败！")
+                print("\n[ERROR] 系统健康检查失败！")
         else:
-            print("\n❌ 系统启动失败！")
+            print("\n[ERROR] 系统启动失败！")
     
     except KeyboardInterrupt:
         pass

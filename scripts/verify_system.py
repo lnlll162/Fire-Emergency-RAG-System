@@ -227,7 +227,7 @@ class SystemVerifier:
     
     async def run_complete_verification(self) -> dict:
         """运行完整系统验证"""
-        print("🚀 开始系统完整验证...")
+        print("[START] 开始系统完整验证...")
         print("=" * 60)
         
         self.start_time = time.time()
@@ -460,27 +460,27 @@ class SystemVerifier:
     def _print_verification_results(self, report: dict):
         """打印验证结果"""
         print("\n" + "=" * 60)
-        print("📊 系统验证报告")
+        print("[INFO] 系统验证报告")
         print("=" * 60)
         
         print(f"⏱️  验证时间: {report['verification_time']}")
         print(f"⏱️  总耗时: {report['total_duration_seconds']:.2f} 秒")
-        print(f"🎯 系统状态: {report['system_status']}")
-        print(f"📈 总体成功率: {report['overall_success_rate']:.1%}")
+        print(f"[STATUS] 系统状态: {report['system_status']}")
+        print(f"[RATE] 总体成功率: {report['overall_success_rate']:.1%}")
         
         print(f"\n🏥 健康检查: {report['health_check']['healthy_count']}/{report['health_check']['total_count']} ({report['health_check']['success_rate']:.1%})")
         print(f"🧪 功能测试: {report['functionality_tests']['passed_tests']}/{report['functionality_tests']['total_tests']} ({report['functionality_tests']['success_rate']:.1%})")
         print(f"🔄 工作流程: {report['workflow_tests']['passed_workflows']}/{report['workflow_tests']['total_workflows']} ({report['workflow_tests']['success_rate']:.1%})")
-        print(f"⚡ 平均响应时间: {report['performance_tests']['average_response_time']:.2f}ms")
+        print(f"[PERF] 平均响应时间: {report['performance_tests']['average_response_time']:.2f}ms")
         
-        print(f"\n💡 改进建议:")
+        print(f"\n[SUGGEST] 改进建议:")
         for i, recommendation in enumerate(report['recommendations'], 1):
             print(f"  {i}. {recommendation}")
         
         if report['system_status'] in ['EXCELLENT', 'GOOD']:
-            print(f"\n✅ 系统验证通过！系统可以正常运行。")
+            print(f"\n[SUCCESS] 系统验证通过！系统可以正常运行。")
         else:
-            print(f"\n❌ 系统验证失败！需要修复问题后重新验证。")
+            print(f"\n[ERROR] 系统验证失败！需要修复问题后重新验证。")
 
 async def main():
     """主函数"""

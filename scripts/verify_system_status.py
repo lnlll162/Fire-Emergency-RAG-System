@@ -20,7 +20,7 @@ class SystemVerifier:
             "knowledge_graph": {"url": "http://localhost:8001", "name": "知识图谱服务"},
             "ollama": {"url": "http://localhost:8003", "name": "Ollama服务"},
             "cache": {"url": "http://localhost:8004", "name": "缓存服务"},
-            "rag": {"url": "http://localhost:8008", "name": "RAG服务"}
+            "rag": {"url": "http://localhost:3000", "name": "RAG服务"}
         }
         self.results = {}
     

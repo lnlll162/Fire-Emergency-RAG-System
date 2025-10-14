@@ -33,7 +33,7 @@ async def check_dependencies():
         logger.info(f"健康服务: {health.healthy_services}/{health.total_services}")
         
         for service in health.services:
-            status = "✅" if service.status == "healthy" else "❌"
+            status = "[OK]" if service.status == "healthy" else "[ERROR]"
             logger.info(f"  {status} {service.service_name}: {service.status} ({service.response_time:.1f}ms)")
         
         if health.overall_status == "unhealthy":
