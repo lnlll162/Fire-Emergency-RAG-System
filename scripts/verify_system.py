@@ -25,11 +25,11 @@ except ImportError:
             self.base_urls = {
                 "cache_service": "http://localhost:8004",
                 "ollama_service": "http://localhost:8003",
-                "rag_service": "http://localhost:8005",
-                "knowledge_graph_service": "http://localhost:8006",
+                "rag_service": "http://localhost:3000",
+                "knowledge_graph_service": "http://localhost:8001",
                 "emergency_service": "http://localhost:8000",
-                "user_service": "http://localhost:8001",
-                "admin_service": "http://localhost:8002"
+                "user_service": "http://localhost:8002",
+                "admin_service": "http://localhost:8005"
             }
         
         async def test_all_services_health(self):
@@ -146,10 +146,11 @@ except ImportError:
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(
-                        f"{url}/generate-rescue-plan",
+                        f"{url}/rescue-plan",
                         json={
-                            "items": [{"name": "木质家具", "material": "wood", "flammability": "high", "toxicity": "low"}],
-                            "environment": {"area": "indoor", "ventilation": "poor", "temperature": 25, "humidity": 60},
+                            "items": [{"name": "木质家具", "material": "木质", "quantity": 1, "location": "客厅", "condition": "正常", "flammability": "易燃", "toxicity": "无毒"}],
+                            "environment": {"type": "室内", "area": "住宅", "floor": 1, "ventilation": "差", "exits": 2, "occupancy": 4, "building_type": "住宅楼", "fire_safety_equipment": ["灭火器"], "special_conditions": "测试环境"},
+                            "additional_info": "测试救援方案",
                             "urgency_level": "high"
                         }
                     )
@@ -192,10 +193,11 @@ except ImportError:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     # 测试救援方案生成
                     response = await client.post(
-                        f"{self.base_urls['emergency_service']}/generate-rescue-plan",
+                        f"{self.base_urls['emergency_service']}/rescue-plan",
                         json={
-                            "items": [{"name": "办公桌", "material": "wood", "flammability": "high", "toxicity": "low"}],
-                            "environment": {"area": "indoor", "ventilation": "poor", "temperature": 30, "humidity": 70},
+                            "items": [{"name": "办公桌", "material": "木质", "quantity": 1, "location": "办公室", "condition": "正常", "flammability": "易燃", "toxicity": "无毒"}],
+                            "environment": {"type": "室内", "area": "商业", "floor": 1, "ventilation": "差", "exits": 2, "occupancy": 10, "building_type": "办公楼", "fire_safety_equipment": ["灭火器"], "special_conditions": "测试环境"},
+                            "additional_info": "测试救援方案",
                             "urgency_level": "high"
                         }
                     )
@@ -233,19 +235,19 @@ class SystemVerifier:
         self.start_time = time.time()
         
         # 1. 健康检查
-        print("1️⃣ 运行健康检查...")
+        print("1. 运行健康检查...")
         health_results = await self._run_health_check()
         
         # 2. 功能测试
-        print("\n2️⃣ 运行功能测试...")
+        print("\n2. 运行功能测试...")
         functionality_results = await self._run_functionality_tests()
         
         # 3. 端到端测试
-        print("\n3️⃣ 运行端到端测试...")
+        print("\n3. 运行端到端测试...")
         workflow_results = await self._run_workflow_tests()
         
         # 4. 性能测试
-        print("\n4️⃣ 运行性能测试...")
+        print("\n4. 运行性能测试...")
         performance_results = await self._run_performance_tests()
         
         # 5. 生成验证报告
@@ -338,11 +340,11 @@ class SystemVerifier:
         base_urls = {
             "cache_service": "http://localhost:8004",
             "ollama_service": "http://localhost:8003",
-            "rag_service": "http://localhost:8005",
-            "knowledge_graph_service": "http://localhost:8006",
+            "rag_service": "http://localhost:3000",
+            "knowledge_graph_service": "http://localhost:8001",
             "emergency_service": "http://localhost:8000",
-            "user_service": "http://localhost:8001",
-            "admin_service": "http://localhost:8002"
+            "user_service": "http://localhost:8002",
+            "admin_service": "http://localhost:8005"
         }
         
         response_times = []

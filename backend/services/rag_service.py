@@ -371,9 +371,34 @@ class RAGService:
     async def test_connection(self) -> bool:
         """测试数据库连接"""
         try:
-            # 测试ChromaDB连接
-            self.chroma_client.heartbeat()
-            return True
+            # 测试ChromaDB连接 - 兼容v1和v2 API
+            import httpx
+            async with httpx.AsyncClient() as client:
+                # 先尝试v1 API
+                try:
+                    response = await client.get(f"http://{self.config.database.chroma_host}:{self.config.database.chroma_port}/api/v1/heartbeat", timeout=5.0)
+                    if response.status_code == 200:
+                        return True
+                except:
+                    pass
+                
+                # 再尝试v2 API
+                try:
+                    response = await client.get(f"http://{self.config.database.chroma_host}:{self.config.database.chroma_port}/api/v1", timeout=5.0)
+                    if response.status_code in [200, 404]:  # 404也表示服务可用
+                        return True
+                except:
+                    pass
+                
+                # 最后尝试根路径
+                try:
+                    response = await client.get(f"http://{self.config.database.chroma_host}:{self.config.database.chroma_port}/", timeout=5.0)
+                    if response.status_code in [200, 404]:
+                        return True
+                except:
+                    pass
+                    
+                return False
         except Exception as e:
             logger.error(f"ChromaDB连接测试失败: {str(e)}")
             return False

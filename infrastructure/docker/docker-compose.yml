@@ -72,7 +72,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # ChromaDB向量数据库
+  # ChromaDB向量数据库 (v1版本)
   chromadb:
     image: chromadb/chroma:latest
     container_name: fire_emergency_chromadb

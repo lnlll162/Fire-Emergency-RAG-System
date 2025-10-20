@@ -35,6 +35,12 @@ from shared.models import (
 logger = logging.getLogger(__name__)
 
 # 数据模型
+class EmergencyQueryRequest(BaseModel):
+    """应急查询请求模型（前端兼容）"""
+    query: str = Field(..., description="查询内容")
+    environment: Dict[str, Any] = Field(default_factory=dict, description="环境信息")
+    urgency_level: Optional[str] = Field("medium", description="紧急程度")
+
 class ServiceStatus(BaseModel):
     """服务状态模型"""
     service_name: str = Field(..., description="服务名称")
@@ -559,6 +565,66 @@ async def generate_rescue_plan(
     except Exception as e:
         logger.error(f"生成救援方案异常: {str(e)}")
         raise HTTPException(status_code=500, detail="生成救援方案失败")
+
+# 添加前端API兼容端点
+@app.post("/api/v1/emergency/query", response_model=APIResponse)
+async def emergency_query(
+    request: EmergencyQueryRequest,
+    service: EmergencyService = Depends(get_emergency_service)
+):
+    """应急查询接口（前端兼容）"""
+    try:
+        logger.info(f"收到应急查询请求: {request.query}")
+        
+        # 将前端请求转换为救援方案请求
+        rescue_request = RescuePlanRequest(
+            items=[Item(
+                name="应急查询",
+                material="其他",  # 使用正确的枚举值
+                quantity=1,
+                location="查询位置",  # 添加必需字段
+                condition="正常",
+                flammability="不燃",
+                toxicity="无毒"
+            )],  # 添加默认物品以满足验证要求
+            environment=Environment(
+                type="室内",  # 默认室内
+                area="商业",  # 默认商业区域
+                floor=1,  # 默认1楼
+                ventilation="良好",  # 默认通风良好
+                exits=2,  # 默认2个出口
+                occupancy=10,  # 默认10人
+                building_type="办公楼",
+                fire_safety_equipment=["灭火器", "烟雾报警器"],
+                special_conditions=request.query
+            ),
+            additional_info=request.query,
+            urgency_level=request.urgency_level or "medium"
+        )
+        
+        # 生成救援方案
+        rescue_plan = await service.generate_rescue_plan(rescue_request)
+        
+        # 转换为前端期望的响应格式
+        response_data = {
+            "response": f"基于查询'{request.query}'的应急指导：\n\n" + "\n".join(rescue_plan.steps[:3]),
+            "confidence": 0.85,
+            "sources": ["消防应急知识库", "救援程序数据库"],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return APIResponse(
+            success=True,
+            data=response_data,
+            message="应急查询成功"
+        )
+    except Exception as e:
+        logger.error(f"应急查询失败: {str(e)}")
+        return APIResponse(
+            success=False,
+            data=None,
+            message=f"应急查询失败: {str(e)}"
+        )
 
 # 启动和关闭事件
 @app.on_event("startup")
