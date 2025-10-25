@@ -7,15 +7,21 @@
 import asyncio
 import logging
 import sys
+import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
+
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, AuthError
@@ -304,6 +310,15 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # 允许前端访问
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有方法
+    allow_headers=["*"],  # 允许所有头
+)
+
 # 依赖注入
 def get_kg_service() -> KnowledgeGraphService:
     return kg_service
@@ -438,6 +453,61 @@ async def get_related_materials(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取相关材质失败: {str(e)}")
+
+# 添加前端API兼容端点
+@app.get("/api/v1/knowledge/graph", response_model=QueryResponse)
+async def knowledge_graph_query(
+    q: str = Query(..., description="搜索关键词"),
+    service: KnowledgeGraphService = Depends(get_kg_service)
+):
+    """知识图谱查询接口（前端兼容）"""
+    try:
+        logger.info(f"收到知识图谱查询请求: {q}")
+        
+        # 搜索相关材质和信息
+        materials = await service.search_materials(q)
+        
+        # 构建图谱节点和边
+        nodes = []
+        edges = []
+        
+        # 为每个找到的材质创建节点
+        for i, material in enumerate(materials[:10]):  # 限制返回数量
+            node_id = f"node_{i}"
+            nodes.append({
+                "id": node_id,
+                "label": material,
+                "type": "material",
+                "properties": {"name": material}
+            })
+            
+            # 如果不是第一个节点，创建与前一个节点的关联
+            if i > 0:
+                edges.append({
+                    "source": f"node_{i-1}",
+                    "target": node_id,
+                    "type": "related_to"
+                })
+        
+        response_data = {
+            "nodes": nodes,
+            "edges": edges,
+            "query": q,
+            "count": len(nodes)
+        }
+        
+        return QueryResponse(
+            success=True,
+            data=response_data,
+            message=f"找到 {len(nodes)} 个相关节点"
+        )
+    except Exception as e:
+        logger.error(f"知识图谱查询失败: {str(e)}")
+        return QueryResponse(
+            success=False,
+            data={"nodes": [], "edges": [], "query": q, "count": 0},
+            message=f"查询失败: {str(e)}"
+        )
 
 # 启动和关闭事件
 @app.on_event("startup")

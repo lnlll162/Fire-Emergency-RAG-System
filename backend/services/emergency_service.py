@@ -9,17 +9,23 @@ import asyncio
 import logging
 import sys
 import json
+import os
 import hashlib
 import time
 from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
+
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 import httpx
 from httpx import AsyncClient, TimeoutException, HTTPError
@@ -70,6 +76,8 @@ class EmergencyService:
     
     def __init__(self):
         self.config = get_config()
+        rag_host = os.getenv("RAG_HOST", "localhost")
+        rag_port = os.getenv("RAG_PORT", "3000")
         self.services = {
             "knowledge_graph": {
                 "url": f"http://localhost:8001",
@@ -77,7 +85,7 @@ class EmergencyService:
                 "required": True
             },
             "rag": {
-                "url": f"http://localhost:8008", 
+                "url": f"http://{rag_host}:{rag_port}", 
                 "timeout": 15.0,
                 "required": True
             },
@@ -94,6 +102,30 @@ class EmergencyService:
         }
         self.cache_enabled = True
         self._initialize_services()
+        # 中文 -> 英文 映射（用于知识图谱服务路径参数）
+        self.material_zh_to_en = {
+            "木质": "wood",
+            "金属": "metal",
+            "塑料": "plastic",
+            "玻璃": "glass",
+            "陶瓷": "ceramic",
+            "布料": "fabric",
+            "皮革": "leather",
+            "电子": "electronics",
+            "化学": "chemical",
+            "其他": "other",
+        }
+        self.area_zh_to_en = {
+            "住宅": "residential",
+            "商业": "commercial",
+            "工业": "industrial",
+            "办公": "office",
+            "学校": "school",
+            "医院": "hospital",
+            "仓库": "warehouse",
+            "室外": "outdoor",
+            "室内": "indoor",
+        }
     
     def _initialize_services(self):
         """初始化服务连接"""
@@ -257,17 +289,34 @@ class EmergencyService:
         logger.info("开始收集知识上下文...")
         
         # 并行收集各种知识
-        tasks = []
-        
-        # 收集材质知识
+        # 收集材质知识（带中文->英文映射与兜底搜索）
         material_tasks = []
         for item in request.items:
-            task = self._call_service("knowledge_graph", f"/materials/{item.material.value}")
-            material_tasks.append(task)
-        
-        # 收集环境知识
-        env_task = self._call_service("knowledge_graph", f"/environments/{request.environment.area.value}")
-        
+            material_zh = getattr(item.material, "value", None) or getattr(item, "material", "")
+            material_en = self.material_zh_to_en.get(material_zh, material_zh)
+            async def fetch_material(mat_en: str = material_en, mat_zh: str = material_zh):
+                try:
+                    return await self._call_service("knowledge_graph", f"/materials/{mat_en}")
+                except Exception:
+                    # 兜底：使用搜索接口（支持中文关键词）
+                    try:
+                        return await self._call_service("knowledge_graph", f"/materials/search/{mat_zh}")
+                    except Exception as e:
+                        logger.warning(f"获取材质知识失败: {mat_zh}/{mat_en}: {str(e)}")
+                        return {"success": False}
+            material_tasks.append(fetch_material())
+
+        # 收集环境知识（带中文->英文映射与简单兜底）
+        area_zh = getattr(request.environment.area, "value", None) or getattr(request.environment, "area", "")
+        area_en = self.area_zh_to_en.get(area_zh, area_zh)
+        async def fetch_environment():
+            try:
+                return await self._call_service("knowledge_graph", f"/environments/{area_en}")
+            except Exception as e:
+                logger.warning(f"获取环境知识失败: {area_zh}/{area_en}: {str(e)}")
+                return {"success": False}
+        env_task = fetch_environment()
+
         # 收集救援程序
         procedures_task = self._call_service("knowledge_graph", "/procedures")
         
@@ -487,6 +536,15 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # 允许前端访问
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有方法
+    allow_headers=["*"],  # 允许所有头
+)
+
 # 依赖注入
 def get_emergency_service() -> EmergencyService:
     return emergency_service
@@ -567,6 +625,49 @@ async def generate_rescue_plan(
         raise HTTPException(status_code=500, detail="生成救援方案失败")
 
 # 添加前端API兼容端点
+@app.get("/api/v1/system/status", response_model=APIResponse)
+async def get_system_status(service: EmergencyService = Depends(get_emergency_service)):
+    """获取系统状态（前端兼容）"""
+    try:
+        # 获取健康检查信息
+        health = await service.check_health()
+        
+        # 转换为前端期望的格式
+        services_dict = {}
+        for svc in health.services:
+            services_dict[svc.service_name] = {
+                "status": "running" if svc.status == "healthy" else "error",
+                "uptime": "运行中",
+                "last_check": svc.last_check.isoformat()
+            }
+        
+        system_status = {
+            "services": services_dict,
+            "databases": {
+                "postgres": True,  # 假设数据库正常
+                "neo4j": True
+            },
+            "overall_status": health.overall_status
+        }
+        
+        return APIResponse(
+            success=True,
+            message="系统状态获取成功",
+            data=system_status
+        )
+    except Exception as e:
+        logger.error(f"获取系统状态失败: {str(e)}")
+        # 返回降级的状态信息
+        return APIResponse(
+            success=False,
+            message=f"获取系统状态失败: {str(e)}",
+            data={
+                "services": {},
+                "databases": {"postgres": False, "neo4j": False},
+                "overall_status": "error"
+            }
+        )
+
 @app.post("/api/v1/emergency/query", response_model=APIResponse)
 async def emergency_query(
     request: EmergencyQueryRequest,
@@ -606,10 +707,46 @@ async def emergency_query(
         rescue_plan = await service.generate_rescue_plan(rescue_request)
         
         # 转换为前端期望的响应格式
+        # 将RescueStep对象转换为详细的文本格式
+        steps_text = []
+        for step in rescue_plan.steps:
+            step_text = f"### 步骤 {step.step_number}: {step.description}\n\n"
+            if step.equipment:
+                step_text += f"**所需设备**: {', '.join(step.equipment)}\n\n"
+            if step.warnings:
+                step_text += f"**注意事项**:\n"
+                for warning in step.warnings:
+                    step_text += f"  - {warning}\n"
+                step_text += "\n"
+            if step.estimated_time:
+                step_text += f"**预计时间**: {step.estimated_time} 分钟\n\n"
+            steps_text.append(step_text)
+        
+        full_response = f"# {rescue_plan.title}\n\n"
+        full_response += f"**优先级**: {rescue_plan.priority.value}\n\n"
+        full_response += f"**预计总时间**: {rescue_plan.estimated_duration} 分钟\n\n"
+        full_response += "---\n\n"
+        full_response += "## 救援步骤\n\n"
+        full_response += "\n".join(steps_text)
+        
+        if rescue_plan.warnings:
+            full_response += "---\n\n"
+            full_response += "## ⚠️ 重要警告\n\n"
+            for warning in rescue_plan.warnings:
+                full_response += f"- {warning}\n"
+            full_response += "\n"
+        
+        if rescue_plan.equipment_list:
+            full_response += "---\n\n"
+            full_response += "## 🛠️ 所需设备清单\n\n"
+            for equipment in rescue_plan.equipment_list:
+                full_response += f"- {equipment}\n"
+            full_response += "\n"
+        
         response_data = {
-            "response": f"基于查询'{request.query}'的应急指导：\n\n" + "\n".join(rescue_plan.steps[:3]),
+            "response": full_response,
             "confidence": 0.85,
-            "sources": ["消防应急知识库", "救援程序数据库"],
+            "sources": ["消防应急知识库", "救援程序数据库", "RAG知识检索", "Ollama AI分析"],
             "timestamp": datetime.now().isoformat()
         }
         

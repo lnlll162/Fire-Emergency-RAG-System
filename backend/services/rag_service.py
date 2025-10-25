@@ -13,6 +13,10 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
+
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))

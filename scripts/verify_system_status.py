@@ -101,39 +101,52 @@ class SystemVerifier:
                     "items": [
                         {
                             "name": "沙发",
-                            "material": "wood",
+                            "material": "木质",
                             "quantity": 1,
-                            "description": "木质沙发"
+                            "location": "客厅",
+                            "condition": "正常",
+                            "flammability": "易燃",
+                            "toxicity": "无毒"
                         }
                     ],
                     "environment": {
-                        "area": "living_room",
-                        "size": "medium",
-                        "ventilation": "good",
-                        "people_count": 2,
+                        "type": "室内",
+                        "area": "住宅",
+                        "floor": 1,
+                        "ventilation": "良好",
+                        "exits": 2,
+                        "occupancy": 3,
+                        "building_type": "住宅楼",
+                        "fire_safety_equipment": ["灭火器"],
                         "special_conditions": "无"
                     },
                     "additional_info": "客厅发生火灾",
-                    "urgency_level": "中"
+                    "urgency_level": "high"
                 }
-                
+
                 response = await client.post(
-                    "http://localhost:8000/generate-rescue-plan",
+                    "http://localhost:8000/rescue-plan",
                     json=test_request
                 )
                 
                 if response.status_code == 200:
-                    data = response.json()
-                    print("  [OK] 救援方案生成测试成功")
-                    print(f"    方案标题: {data.get('title', 'N/A')}")
-                    print(f"    步骤数量: {len(data.get('steps', []))}")
-                    return True
+                    resp = response.json()
+                    if isinstance(resp, dict) and resp.get("success") and isinstance(resp.get("data"), dict):
+                        plan = resp["data"]
+                        print("  [OK] 救援方案生成测试成功")
+                        print(f"    方案标题: {plan.get('title', 'N/A')}")
+                        print(f"    步骤数量: {len(plan.get('steps', []))}")
+                        return True
+                    else:
+                        msg = resp.get("message", "响应格式不符合预期") if isinstance(resp, dict) else "响应不是JSON"
+                        print(f"  [X] 救援方案生成测试失败: {msg}")
+                        return False
                 else:
                     print(f"  [X] 救援方案生成测试失败: HTTP {response.status_code}")
                     return False
                     
         except Exception as e:
-            print(f"  [X] 工作流程测试失败: {str(e)}")
+            print(f"  [X] 工作流程测试失败: {repr(e)}")
             return False
     
     def generate_report(self) -> str:

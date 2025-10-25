@@ -272,7 +272,7 @@ export default function KnowledgePage() {
                         <span className="ml-2 font-medium">{node.label}</span>
                       </div>
                       <p className="text-sm mt-1 opacity-75">
-                        {node.properties.type || node.type}
+                        {(node.properties.type as string) || node.type}
                       </p>
                     </div>
                   ))}
@@ -298,12 +298,12 @@ export default function KnowledgePage() {
                         <div className="flex items-center text-sm">
                           <span className="font-medium">{sourceNode?.label}</span>
                           <LinkIcon className="h-4 w-4 mx-2 text-gray-400" />
-                          <span className="text-blue-600">{edge.properties.relationship}</span>
+                          <span className="text-blue-600">{edge.properties.relationship as string}</span>
                           <LinkIcon className="h-4 w-4 mx-2 text-gray-400" />
                           <span className="font-medium">{targetNode?.label}</span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          {edge.properties.description}
+                          {edge.properties.description as string}
                         </p>
                       </div>
                     )
@@ -323,7 +323,7 @@ export default function KnowledgePage() {
                 <span className="ml-2">{selectedNode.label}</span>
               </CardTitle>
               <CardDescription>
-                {selectedNode.properties.type || selectedNode.type}
+                {(selectedNode.properties.type as string) || selectedNode.type}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -352,7 +352,7 @@ export default function KnowledgePage() {
                           <div key={edge.id} className="text-sm">
                             <span className="font-medium">{relatedNode?.label}</span>
                             <span className="text-gray-500 mx-2">-</span>
-                            <span className="text-blue-600">{edge.properties.relationship}</span>
+                            <span className="text-blue-600">{edge.properties.relationship as string}</span>
                           </div>
                         )
                       })}

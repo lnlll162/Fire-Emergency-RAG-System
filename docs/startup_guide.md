@@ -2,20 +2,25 @@
 
 ## 🚀 快速启动摘要
 
-### ✅ 系统状态更新 (2025-10-20)
+### ✅ 系统状态更新 (2025-10-25)
 - **Neo4j认证问题**: 已完全解决 ✅
+- **Neo4j "Already Running" 问题**: 已完全解决 ✅
 - **所有7个服务**: 正常运行 ✅
 - **系统可用性**: 100% ✅
 - **知识图谱功能**: 完全正常 ✅
+- **自动化工具**: 完整的启动和监控脚本 ✅
 
 ### 一键启动所有服务
 ```bash
 # 1. 启动数据库服务
 cd "D:\Fire Emergency RAG System\infrastructure\docker"
-docker-compose up -d postgres redis neo4j chromadb ollama
+docker-compose up -d postgres redis chromadb ollama
+
+# 1.1 安全启动Neo4j（推荐方法）
+cd "D:\Fire Emergency RAG System"
+.\scripts\start_neo4j_safe.bat
 
 # 2. 启动应用服务
-cd "D:\Fire Emergency RAG System"
 python scripts/start_knowledge_graph_service.py
 python scripts/start_ollama_service.py
 python scripts/start_cache_service.py
@@ -26,6 +31,9 @@ python backend/services/admin_service.py
 
 # 3. 验证系统状态
 python scripts/verify_system_status.py
+
+# 4. 检查Neo4j状态（可选）
+.\scripts\check_neo4j_status.bat
 ```
 
 ### 系统包含7个核心服务
@@ -60,6 +68,15 @@ python scripts/verify_system_status.py
 - **Neo4j** (7474/7687) - 知识图谱
 - **ChromaDB** (8007) - 向量数据库
 - **Ollama** (11434) - 本地LLM
+
+### ⚠️ 重要：PostgreSQL配置说明
+**为避免编码和连接问题，请查看：** [`docs/postgresql_best_practices.md`](./postgresql_best_practices.md)
+
+该文档包含：
+- ✅ 已实施的所有编码修复
+- ✅ 防止问题复现的检查清单
+- ✅ 常见错误的解决方案
+- ✅ 快速验证命令
 
 ## 🎯 正确启动步骤
 
@@ -582,3 +599,132 @@ curl -X POST "http://localhost:8000/api/v1/emergency/query" \
   -H "Content-Type: application/json" \
   -d '{"query": "火灾逃生路线"}'
 ```
+
+## 🔧 Neo4j故障排除
+
+### Neo4j常见问题和解决方案
+
+#### 问题1：Neo4j启动失败 - "already running (pid:7)"
+
+**症状：**
+```
+Error: already running (pid:7)
+```
+
+**原因：** PID文件残留，容器误认为已有实例运行
+
+**解决方案（按推荐顺序）：**
+
+1. **使用永久修复脚本（最推荐）：**
+```bash
+cd "D:\Fire Emergency RAG System"
+.\scripts\fix_neo4j_permanent.bat
+```
+
+2. **使用安全启动脚本：**
+```bash
+.\scripts\start_neo4j_safe.bat
+```
+
+3. **手动修复：**
+```bash
+# 停止并移除容器
+docker-compose stop neo4j
+docker-compose rm -f neo4j
+
+# 重新创建（已自动清理PID文件）
+docker-compose up -d neo4j
+```
+
+#### 问题2：Neo4j健康检查失败
+
+**症状：**
+```
+STATUS: Up 2 minutes (unhealthy)
+```
+
+**检查步骤：**
+```bash
+# 1. 查看日志
+docker logs fire_emergency_neo4j --tail 50
+
+# 2. 检查状态
+.\scripts\check_neo4j_status.bat
+
+# 3. 如果持续不健康，运行修复
+.\scripts\fix_neo4j_permanent.bat
+```
+
+#### 问题3：Neo4j端口被占用
+
+**症状：**
+```
+Error: Port 7474 is already allocated
+```
+
+**解决方案：**
+```bash
+# 查找占用进程
+netstat -ano | findstr "7474"
+netstat -ano | findstr "7687"
+
+# 停止冲突服务或在docker-compose.yml中修改端口
+```
+
+#### 问题4：Neo4j数据卷权限问题
+
+**症状：**
+```
+Permission denied: /data
+```
+
+**解决方案：**
+```bash
+# 完全重置（会丢失数据）
+docker-compose down
+docker volume rm fire_emergency_neo4j_data fire_emergency_neo4j_logs
+docker-compose up -d neo4j
+```
+
+### Neo4j管理工具
+
+系统提供以下自动化工具：
+
+1. **fix_neo4j_permanent.bat** - 永久修复脚本
+   - 彻底解决 "already running" 问题
+   - 自动清理和重建容器
+   - 推荐在遇到任何问题时使用
+
+2. **start_neo4j_safe.bat** - 安全启动脚本
+   - 智能检查和清理
+   - 渐进式健康验证
+   - 适合日常启动
+
+3. **check_neo4j_status.bat** - 状态检查工具
+   - 一键检查所有关键指标
+   - 快速诊断问题
+   - 建议每天使用前检查
+
+4. **monitor_neo4j.bat** - 持续监控工具
+   - 每5分钟自动检查
+   - 实时错误检测
+   - 适合长期运行
+
+**推荐使用流程：**
+```bash
+# 日常启动
+.\scripts\start_neo4j_safe.bat
+
+# 检查状态
+.\scripts\check_neo4j_status.bat
+
+# 遇到问题
+.\scripts\fix_neo4j_permanent.bat
+
+# 长期监控（可选）
+.\scripts\monitor_neo4j.bat
+```
+
+**详细文档：**
+- 完整故障排除指南：`docs/neo4j_troubleshooting.md`
+- 解决方案总结：`docs/neo4j_solution_summary.md`

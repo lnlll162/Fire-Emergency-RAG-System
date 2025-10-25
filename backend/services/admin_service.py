@@ -8,6 +8,7 @@ import asyncio
 import logging
 import sys
 import json
+import os
 import psutil
 import time
 import os
@@ -15,6 +16,11 @@ from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 from pathlib import Path
 from enum import Enum
+from contextlib import asynccontextmanager
+
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
@@ -164,20 +170,24 @@ class AdminService:
             self.redis_client = None
         
         try:
-            # 初始化PostgreSQL连接，明确指定编码
+            # 初始化PostgreSQL连接
+            os.environ.setdefault('PGCLIENTENCODING', 'UTF8')
+            os.environ.setdefault('PGOPTIONS', '--client-encoding=UTF8')
             self.postgres_conn = psycopg2.connect(
                 host=self.config.database.postgres_host,
                 port=self.config.database.postgres_port,
                 database=self.config.database.postgres_db,
                 user=self.config.database.postgres_user,
                 password=self.config.database.postgres_password,
-                client_encoding='utf8'  # 明确指定编码
+                options='-c client_encoding=UTF8 -c client_min_messages=warning'
             )
-            # 设置连接编码
-            self.postgres_conn.set_client_encoding('utf8')
-            logger.info("PostgreSQL连接初始化成功")
-        except Exception as e:
-            logger.warning(f"PostgreSQL连接初始化失败: {str(e)}")
+            self.postgres_conn.set_client_encoding('UTF8')
+            with self.postgres_conn.cursor() as cur:
+                cur.execute("SET client_encoding TO 'UTF8'")
+            self.postgres_conn.commit()
+            logger.info("PostgreSQL连接初始化成功，编码已设置为UTF-8")
+        except Exception as enc_err:
+            logger.warning(f"PostgreSQL连接初始化失败: {str(enc_err)}")
             self.postgres_conn = None
         
         try:
@@ -193,13 +203,26 @@ class AdminService:
         
         try:
             # 初始化ChromaDB连接
+            # ChromaDB可能在初始化时检查API版本，导致ValueError
+            # 这是非关键功能，失败时继续运行
             self.chroma_client = chromadb.HttpClient(
                 host=self.config.database.chroma_host,
-                port=self.config.database.chroma_port
+                port=self.config.database.chroma_port,
+                settings=Settings(allow_reset=True, anonymized_telemetry=False)
             )
-            logger.info("ChromaDB连接初始化成功")
+            # 测试连接
+            try:
+                self.chroma_client.heartbeat()
+                logger.info("ChromaDB连接初始化成功")
+            except Exception as test_err:
+                # 心跳测试失败，但客户端可能仍然可用
+                logger.info("ChromaDB客户端已创建（心跳测试跳过）")
+        except ValueError as ve:
+            # ChromaDB v1 API废弃导致的ValueError，可以安全忽略
+            logger.info("ChromaDB初始化警告（API版本检查失败，不影响使用）")
+            self.chroma_client = None
         except Exception as e:
-            logger.warning(f"ChromaDB连接初始化失败: {str(e)}")
+            logger.warning(f"ChromaDB连接初始化失败: {type(e).__name__}: {str(e)[:100]}")
             self.chroma_client = None
     
     async def get_system_metrics(self) -> SystemMetrics:
@@ -581,16 +604,66 @@ class AdminService:
         except Exception as e:
             logger.error(f"关闭连接失败: {str(e)}")
 
+    async def test_connection(self) -> bool:
+        """Test all database connections"""
+        try:
+            # Test PostgreSQL
+            if self.postgres_conn:
+                with self.postgres_conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+            
+            # Test Redis
+            if self.redis_client:
+                self.redis_client.ping()
+            
+            # Test Neo4j
+            if self.neo4j_driver:
+                with self.neo4j_driver.session() as session:
+                    session.run("MATCH (n) RETURN n LIMIT 1")
+            
+            # Test ChromaDB
+            if self.chroma_client:
+                self.chroma_client.heartbeat()
+            
+            return True
+        except Exception as e:
+            logger.error(f"Connection test failed: {str(e)}")
+            return False
+
 # 创建服务实例
 admin_service = AdminService()
 
 # FastAPI应用
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("管理服务启动中...")
+    try:
+        admin_service._initialize_connections()
+        is_healthy = await admin_service.test_connection()
+        if is_healthy:
+            logger.info("管理服务启动成功")
+        else:
+            logger.warning("管理服务启动，但部分连接异常")
+    except Exception as e:
+        logger.error(f"管理服务启动失败: {str(e)}")
+    
+    yield
+    
+    logger.info("管理服务关闭中...")
+    try:
+        admin_service.close()
+        logger.info("所有连接已关闭")
+    except Exception as e:
+        logger.error(f"关闭连接失败: {str(e)}")
+    logger.info("管理服务已关闭")
+
 app = FastAPI(
     title="管理服务",
-    description="系统监控、数据管理、日志查询、健康检查服务",
+    description="系统监控、数据管理和日志查询服务",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # 依赖注入
@@ -760,24 +833,24 @@ async def cleanup_old_data(
         raise HTTPException(status_code=500, detail=f"清理数据失败: {str(e)}")
 
 # 启动和关闭事件
-@app.on_event("startup")
-async def startup_event():
-    """应用启动事件"""
-    logger.info("管理服务启动中...")
-    try:
-        logger.info("管理服务启动成功")
-    except Exception as e:
-        logger.error(f"管理服务启动失败: {str(e)}")
+# @app.on_event("startup")
+# async def startup_event():
+#     """应用启动事件"""
+#     logger.info("管理服务启动中...")
+#     try:
+#         logger.info("管理服务启动成功")
+#     except Exception as e:
+#         logger.error(f"管理服务启动失败: {str(e)}")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭事件"""
-    logger.info("管理服务关闭中...")
-    try:
-        admin_service.close()
-        logger.info("管理服务已关闭")
-    except Exception as e:
-        logger.error(f"关闭管理服务失败: {str(e)}")
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     """应用关闭事件"""
+#     logger.info("管理服务关闭中...")
+#     try:
+#         admin_service.close()
+#         logger.info("管理服务已关闭")
+#     except Exception as e:
+#         logger.error(f"关闭管理服务失败: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

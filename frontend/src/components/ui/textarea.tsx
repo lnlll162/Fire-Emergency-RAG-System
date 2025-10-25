@@ -1,10 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  // 可以在这里添加自定义属性
-}
+export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, ...props }, ref) => {

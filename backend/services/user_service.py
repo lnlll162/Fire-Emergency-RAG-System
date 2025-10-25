@@ -10,9 +10,15 @@ import sys
 import hashlib
 import secrets
 import uuid
+import os
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 from pathlib import Path
+from contextlib import asynccontextmanager
+
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
@@ -212,10 +218,19 @@ class UserService:
     async def initialize_database(self):
         """初始化数据库"""
         try:
-            await user_db.initialize()
-            await user_db.execute_schema("user_schema.sql")
+            user_db.initialize()  # 同步调用
+            # 执行schema若失败，不阻塞服务启动（可在运行后通过脚本/接口补齐）
+            try:
+                user_db.execute_schema("user_schema.sql")  # 同步调用
+            except UnicodeDecodeError as ue:
+                logger.warning(f"执行schema编码错误（已修复SQL文件编码，请重启）: {str(ue)}")
+            except Exception as schema_err:
+                logger.warning(f"执行schema失败（已忽略以保证服务可用）: {str(schema_err)}")
             self.db_initialized = True
             logger.info("数据库初始化成功")
+        except UnicodeDecodeError as ue:
+            logger.error(f"数据库初始化编码错误: {str(ue)} - SQL文件编码已修复，请重启服务")
+            self.db_initialized = False
         except Exception as e:
             logger.error(f"数据库初始化失败: {str(e)}")
             self.db_initialized = False
@@ -233,9 +248,15 @@ class UserService:
             
             # 测试数据库连接
             if self.db_initialized:
-                async with user_db.pool.acquire() as conn:
-                    await conn.execute("SELECT 1")
-                db_ok = True
+                # 同步测试
+                conn = user_db.pool.getconn()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT 1")
+                    conn.commit()
+                    db_ok = True
+                finally:
+                    user_db.pool.putconn(conn)
             else:
                 # 如果数据库未初始化，尝试重新初始化
                 try:
@@ -336,13 +357,13 @@ class UserService:
             return None
         
         try:
-            # 先尝试用户名查询
-            user_data = await user_db.get_user_by_username(username)
+            # 先尝试用户名查询（同步调用）
+            user_data = user_db.get_user_by_username(username)
             if user_data:
                 return self._dict_to_user_in_db(user_data)
             
-            # 再尝试邮箱查询
-            user_data = await user_db.get_user_by_email(email)
+            # 再尝试邮箱查询（同步调用）
+            user_data = user_db.get_user_by_email(email)
             if user_data:
                 return self._dict_to_user_in_db(user_data)
             
@@ -357,7 +378,7 @@ class UserService:
             return None
         
         try:
-            user_data = await user_db.get_user_by_id(user_id)
+            user_data = user_db.get_user_by_id(user_id)  # 同步调用
             if user_data:
                 return self._dict_to_user_in_db(user_data)
             return None
@@ -398,7 +419,7 @@ class UserService:
                 'hashed_password': user.hashed_password
             }
             
-            user_id = await user_db.create_user(user_data)
+            user_id = user_db.create_user(user_data)  # 同步调用
             user.id = user_id
             logger.info(f"用户保存成功: {user.username} (ID: {user_id})")
             return True
@@ -412,7 +433,7 @@ class UserService:
             return
         
         try:
-            await user_db.update_last_login(user_id)
+            user_db.update_last_login(user_id)  # 同步调用
             logger.info(f"更新用户 {user_id} 的最后登录时间")
         except Exception as e:
             logger.error(f"更新最后登录时间失败: {str(e)}")
@@ -603,12 +624,36 @@ class UserService:
 user_service = UserService()
 
 # FastAPI应用
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("用户服务启动中...")
+    try:
+        await user_service.initialize_database()
+        is_healthy = await user_service.test_connection()
+        if is_healthy:
+            logger.info("用户服务启动成功")
+        else:
+            logger.warning("用户服务启动，但部分连接异常")
+    except Exception as e:
+        logger.error(f"用户服务启动失败: {str(e)}")
+    
+    yield
+    
+    logger.info("用户服务关闭中...")
+    try:
+        user_db.close()
+        logger.info("数据库连接已关闭")
+    except Exception as e:
+        logger.error(f"关闭数据库连接失败: {str(e)}")
+    logger.info("用户服务已关闭")
+
 app = FastAPI(
     title="用户服务",
     description="用户认证、授权和权限管理服务",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # 依赖注入
@@ -769,34 +814,33 @@ async def get_user_profile(
         raise HTTPException(status_code=500, detail=f"获取用户信息失败: {str(e)}")
 
 # 启动和关闭事件
-@app.on_event("startup")
-async def startup_event():
-    """应用启动事件"""
-    logger.info("用户服务启动中...")
-    try:
-        # 初始化数据库
-        await user_service.initialize_database()
+# @app.on_event("startup")
+# async def startup_event():
+#     """应用启动事件"""
+#     logger.info("用户服务启动中...")
+#     try:
+#         # 初始化数据库
+#         await user_service.initialize_database()  # 保持 async 但内部同步
         
-        # 测试连接
-        is_healthy = await user_service.test_connection()
-        if is_healthy:
-            logger.info("用户服务启动成功")
-        else:
-            logger.warning("用户服务启动，但部分连接异常")
-    except Exception as e:
-        logger.error(f"用户服务启动失败: {str(e)}")
+#         # 测试连接
+#         is_healthy = await user_service.test_connection()
+#         if is_healthy:
+#             logger.info("用户服务启动成功")
+#         else:
+#             logger.warning("用户服务启动，但部分连接异常")
+#     except Exception as e:
+#         logger.error(f"用户服务启动失败: {str(e)}")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭事件"""
-    logger.info("用户服务关闭中...")
-    try:
-        # 关闭数据库连接
-        await user_db.close()
-        logger.info("数据库连接已关闭")
-    except Exception as e:
-        logger.error(f"关闭数据库连接失败: {str(e)}")
-    logger.info("用户服务已关闭")
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     """应用关闭事件"""
+#     logger.info("用户服务关闭中...")
+#     try:
+#         user_db.close()  # 同步关闭
+#         logger.info("数据库连接已关闭")
+#     except Exception as e:
+#         logger.error(f"关闭数据库连接失败: {str(e)}")
+#     logger.info("用户服务已关闭")
 
 if __name__ == "__main__":
     import uvicorn

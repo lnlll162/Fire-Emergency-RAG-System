@@ -10,10 +10,15 @@ import sys
 import json
 import hashlib
 import time
+import os
 from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
 from enum import Enum
+
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
@@ -568,19 +573,29 @@ async def get_cache(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取缓存失败: {str(e)}")
 
+class SetCacheRequest(BaseModel):
+    """设置缓存请求模型"""
+    key: str = Field(..., description="缓存键", min_length=1, max_length=500)
+    value: Any = Field(..., description="缓存值")
+    ttl: Optional[int] = Field(None, description="生存时间(秒)", ge=1, le=86400)
+    namespace: str = Field(default="default", description="命名空间")
+    strategy: CacheStrategy = Field(default=CacheStrategy.TTL, description="缓存策略")
+
 @app.post("/set", response_model=CacheResponse)
 async def set_cache(
-    key: str,
-    value: Any,
-    ttl: Optional[int] = None,
-    namespace: str = "default",
-    strategy: CacheStrategy = CacheStrategy.TTL,
+    request: SetCacheRequest,
     service: CacheService = Depends(get_cache_service)
 ):
     """设置缓存值"""
     try:
         start_time = time.time()
-        success = await service.set(key, value, ttl, namespace, strategy)
+        success = await service.set(
+            request.key, 
+            request.value, 
+            request.ttl, 
+            request.namespace, 
+            request.strategy
+        )
         execution_time = (time.time() - start_time) * 1000
         
         return CacheResponse(

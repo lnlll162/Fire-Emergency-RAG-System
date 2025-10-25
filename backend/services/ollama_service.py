@@ -9,9 +9,14 @@ import logging
 import sys
 import json
 import hashlib
+import os
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# 设置代理跳过localhost（解决Windows代理导致的502错误）
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent.parent
@@ -359,83 +364,153 @@ class OllamaService:
         
         # 构建完整提示词
         prompt = f"""
-你是一个专业的火灾应急救援专家。请根据以下信息生成详细的救援方案：
+你是一个专业的火灾应急救援专家。请根据以下信息生成详细的救援方案。
 
-## 物品信息
+## 场景信息
+
+### 物品信息
 {chr(10).join(items_info)}
 
-## 环境信息
+### 环境信息
 {env_info}
 
-## 紧急程度
+### 紧急程度
 {request.urgency_level}
 
-## 附加信息
+### 附加信息
 {request.additional_info or "无"}
 
-请生成一个结构化的救援方案，包括：
-1. 方案标题
-2. 优先级评估
-3. 详细的救援步骤（每个步骤包含描述、所需设备、注意事项、预计时间）
-4. 所需设备清单
-5. 总体安全警告
-6. 预计总时长
+## 输出要求
 
-请确保方案专业、详细、可操作，并考虑所有安全因素。
+请严格按照以下格式生成救援方案：
+
+### 第一步：立即响应
+- 描述：[具体操作描述]
+- 所需设备：灭火器，消防斧，防护服
+- 注意事项：确保自身安全，保持通讯畅通
+- 预计时间：5分钟
+
+### 第二步：火势控制
+- 描述：[具体操作描述]
+- 所需设备：[设备列表]
+- 注意事项：[安全提醒]
+- 预计时间：[时长]
+
+### 第三步：人员疏散
+- 描述：[具体操作描述]
+- 所需设备：[设备列表]
+- 注意事项：[安全提醒]
+- 预计时间：[时长]
+
+### 第四步：现场清理
+- 描述：[具体操作描述]
+- 所需设备：[设备列表]
+- 注意事项：[安全提醒]
+- 预计时间：[时长]
+
+注意：
+1. 每个步骤必须包含完整的描述、设备、注意事项和时间
+2. 步骤描述要具体、可操作
+3. 设备列表用逗号分隔
+4. 注意事项要突出安全要点
+5. 时间估计要合理
+
+请现在生成救援方案：
 """
         return prompt
     
     def _parse_rescue_plan_response(self, response: str, urgency_level: str = "中") -> RescuePlan:
         """解析救援方案响应"""
         try:
-            # 简单的解析逻辑，实际应用中可能需要更复杂的解析
-            lines = response.strip().split('\n')
+            # 清理响应文本
+            response = response.strip()
+            lines = [line.strip() for line in response.split('\n') if line.strip()]
             
-            # 提取标题
+            # 提取标题（查找"#"或"标题"关键词）
             title = "火灾应急救援方案"
             for line in lines:
-                if "标题" in line or "方案" in line:
-                    title = line.split(":")[-1].strip()
+                if line.startswith("#") and ("方案" in line or "标题" in line):
+                    title = line.replace("#", "").strip()
+                    break
+                elif "标题" in line and ":" in line:
+                    title = line.split(":", 1)[1].strip()
                     break
             
-            # 提取步骤
+            # 提取步骤 - 使用更智能的方法
             steps = []
             current_step = None
             step_number = 1
+            current_section = None
             
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
+            import re
+            
+            for i, line in enumerate(lines):
+                # 检测新步骤（匹配 "### 第X步：" 格式）
+                step_match = re.match(r'^#{1,3}\s*第([一二三四五六七八九十\d]+)步[：:](.+)', line)
                 
-                # 检测步骤开始
-                if any(keyword in line for keyword in ["步骤", "第", "1.", "2.", "3.", "4.", "5."]):
+                if step_match:
+                    # 保存前一个步骤
                     if current_step:
                         steps.append(current_step)
                     
-                    # 提取步骤描述
-                    description = line
-                    if ":" in line:
-                        description = line.split(":", 1)[1].strip()
+                    # 提取步骤标题作为描述
+                    step_title = step_match.group(2).strip()
                     
                     current_step = RescueStep(
                         step_number=step_number,
-                        description=description,
+                        description=step_title,
                         equipment=[],
                         warnings=[],
-                        estimated_time=None
+                        estimated_time=5
                     )
                     step_number += 1
+                    current_section = None
                 
-                # 检测设备信息
-                elif current_step and any(keyword in line for keyword in ["设备", "工具", "器材"]):
-                    if ":" in line:
-                        equipment_text = line.split(":", 1)[1].strip()
-                        current_step.equipment.extend([eq.strip() for eq in equipment_text.split(",")])
-                
-                # 检测警告信息
-                elif current_step and any(keyword in line for keyword in ["注意", "警告", "危险"]):
-                    current_step.warnings.append(line)
+                # 如果在步骤内，解析各个字段
+                elif current_step:
+                    # 检测描述
+                    desc_match = re.match(r'^-?\s*(描述|说明)[：:](.+)', line)
+                    if desc_match:
+                        desc_text = desc_match.group(2).strip()
+                        if desc_text and desc_text != "[具体操作描述]":
+                            current_step.description = desc_text
+                        current_section = 'description'
+                    
+                    # 检测设备
+                    elif re.match(r'^-?\s*所需设备[：:]', line):
+                        current_section = 'equipment'
+                        equipment_text = re.sub(r'^-?\s*所需设备[：:]', '', line).strip()
+                        if equipment_text and equipment_text != "[设备列表]":
+                            equipment_items = [eq.strip() for eq in re.split(r'[,，、]', equipment_text) if eq.strip()]
+                            current_step.equipment.extend(equipment_items)
+                    
+                    # 检测注意事项
+                    elif re.match(r'^-?\s*注意事项[：:]', line):
+                        current_section = 'warnings'
+                        warning_text = re.sub(r'^-?\s*注意事项[：:]', '', line).strip()
+                        if warning_text and warning_text != "[安全提醒]":
+                            current_step.warnings.append(warning_text)
+                    
+                    # 检测预计时间
+                    elif re.match(r'^-?\s*预计时间[：:]', line):
+                        current_section = 'time'
+                        time_text = re.sub(r'^-?\s*预计时间[：:]', '', line).strip()
+                        time_match = re.search(r'(\d+)\s*分钟', time_text)
+                        if time_match:
+                            current_step.estimated_time = int(time_match.group(1))
+                        else:
+                            # 尝试匹配纯数字
+                            num_match = re.search(r'(\d+)', time_text)
+                            if num_match:
+                                current_step.estimated_time = int(num_match.group(1))
+                    
+                    # 继续收集列表项
+                    elif line.startswith("-") or line.startswith("•"):
+                        item_text = line.lstrip("-•").strip()
+                        if current_section == 'equipment' and item_text:
+                            current_step.equipment.append(item_text)
+                        elif current_section == 'warnings' and item_text:
+                            current_step.warnings.append(item_text)
             
             # 添加最后一个步骤
             if current_step:

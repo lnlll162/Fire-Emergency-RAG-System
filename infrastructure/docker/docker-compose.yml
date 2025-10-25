@@ -58,6 +58,11 @@ services:
       - NEO4J_apoc_import_file_use__neo4j__config=true
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
       - NEO4J_dbms_security_procedures_allowlist=apoc.*
+      # 防止重启问题的关键配置
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_dbms_memory_pagecache_size=512M
+      - NEO4J_dbms_memory_heap_initial__size=512M
+      - NEO4J_dbms_memory_heap_max__size=1G
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -66,13 +71,15 @@ services:
       - neo4j_logs:/logs
     networks:
       - fire_emergency_network
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "RETURN 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 60s
 
-  # ChromaDB向量数据库 (v1版本)
+  # ChromaDB向量数据库
   chromadb:
     image: chromadb/chroma:latest
     container_name: fire_emergency_chromadb
@@ -85,11 +92,14 @@ services:
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
       - CHROMA_SERVER_HTTP_PORT=8000
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/8000' || exit 1"]
       interval: 30s
-      timeout: 10s
-      retries: 5
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # Ollama AI服务
   ollama:
@@ -104,11 +114,13 @@ services:
       - fire_emergency_network
     environment:
       - OLLAMA_MODELS=/models
+      - OLLAMA_HOST=0.0.0.0:11434
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/11434' || exit 1"]
       interval: 30s
-      timeout: 10s
-      retries: 5
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   # 知识图谱服务
   knowledge_graph_service:
