@@ -306,14 +306,14 @@ class EmergencyService:
                         return {"success": False}
             material_tasks.append(fetch_material())
 
-        # 收集环境知识（带中文->英文映射与简单兜底）
+        # 收集环境知识（直接使用中文查询）
         area_zh = getattr(request.environment.area, "value", None) or getattr(request.environment, "area", "")
-        area_en = self.area_zh_to_en.get(area_zh, area_zh)
         async def fetch_environment():
             try:
-                return await self._call_service("knowledge_graph", f"/environments/{area_en}")
+                # 直接使用中文查询，因为Neo4j中存储的是中文
+                return await self._call_service("knowledge_graph", f"/environments/{area_zh}")
             except Exception as e:
-                logger.warning(f"获取环境知识失败: {area_zh}/{area_en}: {str(e)}")
+                logger.warning(f"获取环境知识失败: {area_zh}: {str(e)}")
                 return {"success": False}
         env_task = fetch_environment()
 
@@ -666,6 +666,38 @@ async def get_system_status(service: EmergencyService = Depends(get_emergency_se
                 "databases": {"postgres": False, "neo4j": False},
                 "overall_status": "error"
             }
+        )
+
+@app.get("/api/v1/knowledge/graph", response_model=APIResponse)
+async def knowledge_graph_query(
+    q: str = Query(..., description="搜索关键词"),
+    service: EmergencyService = Depends(get_emergency_service)
+):
+    """知识图谱查询接口（前端兼容）"""
+    try:
+        logger.info(f"收到知识图谱查询请求: {q}")
+        
+        # 调用知识图谱服务
+        response = await service._call_service("knowledge_graph", f"/api/v1/knowledge/graph?q={q}")
+        
+        if response and response.get("success"):
+            return APIResponse(
+                success=True,
+                message=response.get("message", "查询成功"),
+                data=response.get("data", {})
+            )
+        else:
+            return APIResponse(
+                success=False,
+                message=response.get("message", "查询失败") if response else "知识图谱服务不可用",
+                data={"nodes": [], "edges": [], "query": q, "count": 0}
+            )
+    except Exception as e:
+        logger.error(f"知识图谱查询失败: {str(e)}")
+        return APIResponse(
+            success=False,
+            message=f"查询失败: {str(e)}",
+            data={"nodes": [], "edges": [], "query": q, "count": 0}
         )
 
 @app.post("/api/v1/emergency/query", response_model=APIResponse)

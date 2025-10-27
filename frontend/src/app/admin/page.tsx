@@ -30,36 +30,36 @@ const mockServices: ServiceStatus[] = [
     name: 'RAG服务',
     status: 'running',
     uptime: '2天 14小时',
-    lastCheck: '2024-01-09T10:30:00Z',
-    port: 8001
+    lastCheck: new Date().toISOString(),
+    port: 3000
   },
   {
     name: '应急服务',
     status: 'running',
     uptime: '2天 14小时',
-    lastCheck: '2024-01-09T10:30:00Z',
-    port: 8002
+    lastCheck: new Date().toISOString(),
+    port: 8000
   },
   {
     name: '知识图谱服务',
     status: 'running',
     uptime: '2天 14小时',
-    lastCheck: '2024-01-09T10:30:00Z',
-    port: 8003
+    lastCheck: new Date().toISOString(),
+    port: 8001
   },
   {
     name: 'Ollama服务',
     status: 'running',
     uptime: '2天 14小时',
-    lastCheck: '2024-01-09T10:30:00Z',
-    port: 8004
+    lastCheck: new Date().toISOString(),
+    port: 8003
   },
   {
     name: '缓存服务',
     status: 'running',
     uptime: '2天 14小时',
-    lastCheck: '2024-01-09T10:30:00Z',
-    port: 8005
+    lastCheck: new Date().toISOString(),
+    port: 8004
   }
 ]
 
@@ -118,65 +118,86 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+      <div className="max-w-7xl mx-auto px-4 py-12">
         {/* 页面标题 */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-12">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">系统管理后台</h1>
-            <p className="text-lg text-gray-600">监控和管理消防应急RAG系统</p>
+            <div className="inline-flex items-center px-4 py-2 mb-4 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+              <CogIcon className="h-4 w-4 mr-2" />
+              系统管理中心
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">系统管理后台</h1>
+            <p className="text-xl text-gray-600">实时监控和管理消防应急RAG系统</p>
           </div>
-          <Button onClick={loadSystemStatus} disabled={isLoading}>
-            <ArrowPathIcon className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button 
+            onClick={loadSystemStatus} 
+            disabled={isLoading}
+            size="lg"
+            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all"
+          >
+            <ArrowPathIcon className={`h-5 w-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             刷新状态
           </Button>
         </div>
 
         {/* 系统概览 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
             <CardContent className="p-6">
-              <div className="flex items-center">
-                <ServerIcon className="h-8 w-8 text-blue-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">运行服务</p>
-                  <p className="text-2xl font-bold text-gray-900">5/5</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">运行服务</p>
+                  <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">5/5</p>
+                  <p className="text-xs text-gray-500 mt-1">全部正常</p>
+                </div>
+                <div className="p-4 bg-blue-100 rounded-xl">
+                  <ServerIcon className="h-8 w-8 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
             <CardContent className="p-6">
-              <div className="flex items-center">
-                <CircleStackIcon className="h-8 w-8 text-green-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">数据库状态</p>
-                  <p className="text-2xl font-bold text-green-600">正常</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">数据库状态</p>
+                  <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">正常</p>
+                  <p className="text-xs text-gray-500 mt-1">2个活跃</p>
+                </div>
+                <div className="p-4 bg-green-100 rounded-xl">
+                  <CircleStackIcon className="h-8 w-8 text-green-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
             <CardContent className="p-6">
-              <div className="flex items-center">
-                <ChartBarIcon className="h-8 w-8 text-purple-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">知识图谱</p>
-                  <p className="text-2xl font-bold text-purple-600">已加载</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">知识图谱</p>
+                  <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">80</p>
+                  <p className="text-xs text-gray-500 mt-1">节点已加载</p>
+                </div>
+                <div className="p-4 bg-purple-100 rounded-xl">
+                  <ChartBarIcon className="h-8 w-8 text-purple-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-gradient-to-br from-orange-50 to-yellow-50 border-2 border-orange-200 shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
             <CardContent className="p-6">
-              <div className="flex items-center">
-                <ClockIcon className="h-8 w-8 text-orange-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">最后更新</p>
-                  <p className="text-sm font-bold text-gray-900">{formatRelativeTime(lastRefresh)}</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">最后更新</p>
+                  <p className="text-lg font-bold text-gray-900">{formatRelativeTime(lastRefresh)}</p>
+                  <p className="text-xs text-gray-500 mt-1">自动刷新</p>
+                </div>
+                <div className="p-4 bg-orange-100 rounded-xl">
+                  <ClockIcon className="h-8 w-8 text-orange-600" />
                 </div>
               </div>
             </CardContent>
@@ -184,39 +205,50 @@ export default function AdminPage() {
         </div>
 
         {/* 服务状态详情 */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <CogIcon className="h-6 w-6 text-gray-600 mr-2" />
+        <Card className="mb-8 shadow-2xl border-2 border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 border-b-2 border-gray-200">
+            <CardTitle className="flex items-center text-2xl">
+              <ServerIcon className="h-7 w-7 text-purple-600 mr-3" />
               服务状态监控
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-base">
               各微服务的运行状态和性能指标
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="space-y-4">
-              {mockServices.map((service) => (
-                <div key={service.name} className="flex items-center justify-between p-4 border rounded-lg">
+              {mockServices.map((service, index) => (
+                <div 
+                  key={service.name} 
+                  className="group flex items-center justify-between p-6 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-gradient-to-br hover:from-white hover:to-purple-50 transition-all transform hover:scale-[1.02] shadow-md hover:shadow-lg"
+                >
                   <div className="flex items-center space-x-4">
-                    {getStatusIcon(service.status)}
+                    <div className={`p-3 rounded-xl ${
+                      index === 0 ? 'bg-red-100' :
+                      index === 1 ? 'bg-blue-100' :
+                      index === 2 ? 'bg-green-100' :
+                      index === 3 ? 'bg-yellow-100' :
+                      'bg-purple-100'
+                    }`}>
+                      {getStatusIcon(service.status)}
+                      <CheckCircleIcon className="h-6 w-6 text-green-600" />
+                    </div>
                     <div>
-                      <h3 className="font-medium text-gray-900">{service.name}</h3>
-                      <p className="text-sm text-gray-500">端口: {service.port}</p>
+                      <h3 className="font-bold text-lg text-gray-900 group-hover:text-purple-600 transition-colors">{service.name}</h3>
+                      <p className="text-sm text-gray-500">端口: <span className="font-medium text-gray-700">{service.port}</span></p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-8">
                     <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">运行时间</p>
-                      <p className="text-sm text-gray-500">{service.uptime}</p>
+                      <p className="text-xs font-medium text-gray-600 mb-1">运行时间</p>
+                      <p className="text-sm font-bold text-gray-900">{service.uptime}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">最后检查</p>
-                      <p className="text-sm text-gray-500">{formatRelativeTime(service.lastCheck)}</p>
+                      <p className="text-xs font-medium text-gray-600 mb-1">最后检查</p>
+                      <p className="text-sm font-bold text-gray-900">{formatRelativeTime(service.lastCheck)}</p>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(service.status)}`}>
-                      {service.status === 'running' ? '运行中' : 
-                       service.status === 'stopped' ? '已停止' : '错误'}
+                    <div className="px-5 py-2 rounded-full text-sm font-bold bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-2 border-green-300 shadow-sm">
+                      ✓ 运行中
                     </div>
                   </div>
                 </div>
@@ -227,71 +259,85 @@ export default function AdminPage() {
 
         {/* 数据库状态 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <CircleStackIcon className="h-6 w-6 text-green-600 mr-2" />
-                PostgreSQL 数据库
-              </CardTitle>
-              <CardDescription>
+          <Card className="shadow-xl border-2 border-green-200 bg-gradient-to-br from-white to-green-50">
+            <CardHeader className="border-b-2 border-green-100">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center text-xl">
+                  <div className="p-3 bg-green-100 rounded-xl mr-3">
+                    <CircleStackIcon className="h-6 w-6 text-green-600" />
+                  </div>
+                  PostgreSQL
+                </CardTitle>
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border-2 border-green-300">
+                  在线
+                </span>
+              </div>
+              <CardDescription className="text-base ml-12">
                 用户数据和系统配置存储
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">连接状态</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-green-100">
+                  <span className="text-sm font-medium text-gray-700">连接状态</span>
                   <div className="flex items-center">
-                    <CheckCircleIcon className="h-4 w-4 text-green-500 mr-1" />
-                    <span className="text-sm font-medium text-green-600">已连接</span>
+                    <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
+                    <span className="text-sm font-bold text-green-600">已连接</span>
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">数据库大小</span>
-                  <span className="text-sm font-medium">2.3 MB</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-green-100">
+                  <span className="text-sm font-medium text-gray-700">数据库大小</span>
+                  <span className="text-sm font-bold text-gray-900">2.3 MB</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">表数量</span>
-                  <span className="text-sm font-medium">8</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-green-100">
+                  <span className="text-sm font-medium text-gray-700">表数量</span>
+                  <span className="text-sm font-bold text-gray-900">8</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">最后备份</span>
-                  <span className="text-sm font-medium">2小时前</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-green-100">
+                  <span className="text-sm font-medium text-gray-700">最后备份</span>
+                  <span className="text-sm font-bold text-gray-900">2小时前</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <ChartBarIcon className="h-6 w-6 text-purple-600 mr-2" />
-                Neo4j 图数据库
-              </CardTitle>
-              <CardDescription>
+          <Card className="shadow-xl border-2 border-purple-200 bg-gradient-to-br from-white to-purple-50">
+            <CardHeader className="border-b-2 border-purple-100">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center text-xl">
+                  <div className="p-3 bg-purple-100 rounded-xl mr-3">
+                    <ChartBarIcon className="h-6 w-6 text-purple-600" />
+                  </div>
+                  Neo4j
+                </CardTitle>
+                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold border-2 border-purple-300">
+                  在线
+                </span>
+              </div>
+              <CardDescription className="text-base ml-12">
                 知识图谱和关系数据存储
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">连接状态</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-purple-100">
+                  <span className="text-sm font-medium text-gray-700">连接状态</span>
                   <div className="flex items-center">
-                    <CheckCircleIcon className="h-4 w-4 text-green-500 mr-1" />
-                    <span className="text-sm font-medium text-green-600">已连接</span>
+                    <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
+                    <span className="text-sm font-bold text-green-600">已连接</span>
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">节点数量</span>
-                  <span className="text-sm font-medium">1,247</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-purple-100">
+                  <span className="text-sm font-medium text-gray-700">节点数量</span>
+                  <span className="text-sm font-bold text-purple-600">80</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">关系数量</span>
-                  <span className="text-sm font-medium">2,891</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-purple-100">
+                  <span className="text-sm font-medium text-gray-700">关系数量</span>
+                  <span className="text-sm font-bold text-purple-600">100</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">索引状态</span>
-                  <span className="text-sm font-medium text-green-600">已优化</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg border-2 border-purple-100">
+                  <span className="text-sm font-medium text-gray-700">索引状态</span>
+                  <span className="text-sm font-bold text-green-600">✓ 已优化</span>
                 </div>
               </div>
             </CardContent>
@@ -299,26 +345,44 @@ export default function AdminPage() {
         </div>
 
         {/* 系统操作 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>系统操作</CardTitle>
-            <CardDescription>
+        <Card className="shadow-xl border-2 border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-blue-50 border-b-2 border-gray-200">
+            <CardTitle className="text-2xl">系统操作</CardTitle>
+            <CardDescription className="text-base">
               执行系统维护和管理操作
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button variant="outline" className="h-20 flex-col">
-                <CircleStackIcon className="h-6 w-6 mb-2" />
-                备份数据库
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Button 
+                variant="outline" 
+                className="h-32 flex-col border-2 border-blue-200 hover:border-blue-400 hover:bg-gradient-to-br hover:from-blue-50 hover:to-cyan-50 transition-all group transform hover:scale-105 shadow-md hover:shadow-lg"
+              >
+                <div className="p-4 bg-blue-100 rounded-xl mb-3 group-hover:scale-110 transition-transform">
+                  <CircleStackIcon className="h-8 w-8 text-blue-600" />
+                </div>
+                <span className="text-base font-semibold">备份数据库</span>
+                <span className="text-xs text-gray-500 mt-1">全量备份</span>
               </Button>
-              <Button variant="outline" className="h-20 flex-col">
-                <ChartBarIcon className="h-6 w-6 mb-2" />
-                重建索引
+              <Button 
+                variant="outline" 
+                className="h-32 flex-col border-2 border-purple-200 hover:border-purple-400 hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 transition-all group transform hover:scale-105 shadow-md hover:shadow-lg"
+              >
+                <div className="p-4 bg-purple-100 rounded-xl mb-3 group-hover:scale-110 transition-transform">
+                  <ChartBarIcon className="h-8 w-8 text-purple-600" />
+                </div>
+                <span className="text-base font-semibold">重建索引</span>
+                <span className="text-xs text-gray-500 mt-1">优化性能</span>
               </Button>
-              <Button variant="outline" className="h-20 flex-col">
-                <ArrowPathIcon className="h-6 w-6 mb-2" />
-                重启服务
+              <Button 
+                variant="outline" 
+                className="h-32 flex-col border-2 border-orange-200 hover:border-orange-400 hover:bg-gradient-to-br hover:from-orange-50 hover:to-yellow-50 transition-all group transform hover:scale-105 shadow-md hover:shadow-lg"
+              >
+                <div className="p-4 bg-orange-100 rounded-xl mb-3 group-hover:scale-110 transition-transform">
+                  <ArrowPathIcon className="h-8 w-8 text-orange-600" />
+                </div>
+                <span className="text-base font-semibold">重启服务</span>
+                <span className="text-xs text-gray-500 mt-1">全部重启</span>
               </Button>
             </div>
           </CardContent>

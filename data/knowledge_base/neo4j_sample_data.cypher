@@ -1369,10 +1369,6 @@ MATCH (item34:Item {id: 'item_034'}), (plan13:RescuePlan {id: 'plan_013'})
 CREATE (item34)-[:REQUIRES_RESCUE_PLAN {priority: 'critical'}]->(plan13)
 
 MATCH (item35:Item {id: 'item_035'}), (plan13:RescuePlan {id: 'plan_013'})
-CREATE (item35)-[:REQUIRES_RESCUE_PLAN {priority: 'critical'}]->(plan13)
+CREATE (item35)-[:REQUIRES_RESCUE_PLAN {priority: 'critical'}]->(plan13);
 
-// 创建索引
-CREATE INDEX item_name_index IF NOT EXISTS FOR (i:Item) ON (i.name)
-CREATE INDEX material_name_index IF NOT EXISTS FOR (m:Material) ON (m.name)
-CREATE INDEX environment_type_index IF NOT EXISTS FOR (e:Environment) ON (e.type)
-CREATE INDEX rescue_plan_priority_index IF NOT EXISTS FOR (r:RescuePlan) ON (r.priority)
+// 注意：索引将在数据导入后单独创建

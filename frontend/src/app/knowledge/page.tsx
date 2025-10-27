@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { GraphVisualization } from '@/components/ui/graph-visualization'
 import { knowledgeGraphAPI, type KnowledgeGraphNode, type KnowledgeGraphEdge } from '@/lib/api'
 import { 
   MagnifyingGlassIcon,
@@ -12,7 +13,8 @@ import {
   LinkIcon,
   FireIcon,
   ExclamationTriangleIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline'
 
 interface GraphData {
@@ -178,35 +180,49 @@ export default function KnowledgePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+      <div className="max-w-7xl mx-auto px-4 py-12">
         {/* 页面标题 */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">消防知识图谱</h1>
-          <p className="text-lg text-gray-600">探索消防知识之间的关联关系</p>
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center px-4 py-2 mb-4 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+            <ChartBarIcon className="h-4 w-4 mr-2" />
+            知识网络可视化
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            消防知识图谱
+          </h1>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            探索消防知识之间的关联关系，直观展示实体和关系网络
+          </p>
         </div>
 
         {/* 搜索栏 */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <ChartBarIcon className="h-6 w-6 text-blue-600 mr-2" />
+        <Card className="mb-8 shadow-xl border-2 hover:border-blue-200 transition-colors">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50">
+            <CardTitle className="flex items-center text-2xl">
+              <MagnifyingGlassIcon className="h-7 w-7 text-blue-600 mr-3" />
               知识图谱搜索
             </CardTitle>
-            <CardDescription>
-              搜索消防相关的实体和关系
+            <CardDescription className="text-base">
+              搜索消防相关的实体和关系，探索知识网络
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="flex gap-4">
               <Input
-                placeholder="搜索消防知识实体..."
+                placeholder="搜索消防知识实体，例如：火灾、消防栓、疏散..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="text-lg border-2 focus:border-blue-400 rounded-xl"
               />
-              <Button onClick={handleSearch} disabled={isLoading || !searchQuery.trim()}>
-                <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
+              <Button 
+                onClick={handleSearch} 
+                disabled={isLoading || !searchQuery.trim()}
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all min-w-[120px]"
+              >
+                <MagnifyingGlassIcon className="h-5 w-5 mr-2" />
                 搜索
               </Button>
             </div>
@@ -228,21 +244,52 @@ export default function KnowledgePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* 知识图谱可视化区域 */}
           <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>知识图谱</CardTitle>
-                <CardDescription>
-                  节点表示实体，连线表示关系
-                </CardDescription>
+            <Card className="shadow-2xl border-2 border-blue-200">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b-2 border-blue-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-2xl flex items-center">
+                      <SparklesIcon className="h-6 w-6 text-blue-600 mr-2" />
+                      知识图谱可视化
+                    </CardTitle>
+                    <CardDescription className="text-base mt-2">
+                      节点表示实体，箭头表示关系。点击节点查看详情
+                    </CardDescription>
+                  </div>
+                  <div className="text-sm text-gray-600 bg-white px-4 py-2 rounded-full border-2 border-gray-200">
+                    {graphData.nodes.length} 个节点
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">知识图谱可视化区域</p>
-                    <p className="text-sm text-gray-500 mt-2">
-                      这里将集成图形可视化组件
-                    </p>
+              <CardContent className="p-0">
+                <div className="h-[600px] relative">
+                  <GraphVisualization
+                    nodes={graphData.nodes}
+                    edges={graphData.edges}
+                    selectedNodeId={selectedNode?.id}
+                    onNodeClick={setSelectedNode}
+                  />
+                  {/* 图例 */}
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border-2 border-gray-200">
+                    <h4 className="font-semibold text-sm text-gray-900 mb-3">节点类型</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 rounded-full bg-red-500 mr-2"></div>
+                        <span className="text-xs text-gray-700">事件</span>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
+                        <span className="text-xs text-gray-700">设备</span>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 rounded-full bg-yellow-500 mr-2"></div>
+                        <span className="text-xs text-gray-700">程序</span>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 rounded-full bg-green-500 mr-2"></div>
+                        <span className="text-xs text-gray-700">人员</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -252,24 +299,28 @@ export default function KnowledgePage() {
           {/* 节点列表和详情 */}
           <div className="space-y-6">
             {/* 节点列表 */}
-            <Card>
-              <CardHeader>
-                <CardTitle>实体列表</CardTitle>
-                <CardDescription>
+            <Card className="shadow-xl border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-blue-50">
+                <CardTitle className="text-xl">实体列表</CardTitle>
+                <CardDescription className="text-base">
                   点击查看详细信息
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+              <CardContent className="max-h-[400px] overflow-y-auto">
+                <div className="space-y-3">
                   {graphData.nodes.map((node) => (
                     <div
                       key={node.id}
-                      className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-shadow ${getNodeColor(node.type)}`}
+                      className={`p-4 rounded-xl border-2 cursor-pointer hover:shadow-lg transition-all transform hover:scale-105 ${
+                        getNodeColor(node.type)
+                      } ${
+                        selectedNode?.id === node.id ? 'ring-2 ring-blue-400 shadow-lg' : ''
+                      }`}
                       onClick={() => setSelectedNode(node)}
                     >
                       <div className="flex items-center">
                         {getNodeIcon(node.type)}
-                        <span className="ml-2 font-medium">{node.label}</span>
+                        <span className="ml-2 font-semibold">{node.label}</span>
                       </div>
                       <p className="text-sm mt-1 opacity-75">
                         {(node.properties.type as string) || node.type}
@@ -281,28 +332,29 @@ export default function KnowledgePage() {
             </Card>
 
             {/* 关系列表 */}
-            <Card>
-              <CardHeader>
-                <CardTitle>关系列表</CardTitle>
-                <CardDescription>
+            <Card className="shadow-xl border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-purple-50">
+                <CardTitle className="text-xl flex items-center">
+                  <LinkIcon className="h-5 w-5 text-purple-600 mr-2" />
+                  关系列表
+                </CardTitle>
+                <CardDescription className="text-base">
                   实体间的关系
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+              <CardContent className="max-h-[300px] overflow-y-auto">
+                <div className="space-y-3">
                   {graphData.edges.map((edge) => {
                     const sourceNode = graphData.nodes.find(n => n.id === edge.source)
                     const targetNode = graphData.nodes.find(n => n.id === edge.target)
                     return (
-                      <div key={edge.id} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center text-sm">
-                          <span className="font-medium">{sourceNode?.label}</span>
-                          <LinkIcon className="h-4 w-4 mx-2 text-gray-400" />
-                          <span className="text-blue-600">{edge.properties.relationship as string}</span>
-                          <LinkIcon className="h-4 w-4 mx-2 text-gray-400" />
-                          <span className="font-medium">{targetNode?.label}</span>
+                      <div key={edge.id} className="p-4 bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl border-2 border-gray-200 hover:border-purple-300 transition-all">
+                        <div className="flex items-center text-sm flex-wrap gap-2">
+                          <span className="font-semibold text-gray-900 bg-white px-2 py-1 rounded">{sourceNode?.label}</span>
+                          <span className="text-purple-600 font-medium">→ {edge.properties.relationship as string} →</span>
+                          <span className="font-semibold text-gray-900 bg-white px-2 py-1 rounded">{targetNode?.label}</span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-gray-600 mt-2 italic">
                           {edge.properties.description as string}
                         </p>
                       </div>
@@ -316,32 +368,47 @@ export default function KnowledgePage() {
 
         {/* 选中节点详情 */}
         {selectedNode && (
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                {getNodeIcon(selectedNode.type)}
-                <span className="ml-2">{selectedNode.label}</span>
-              </CardTitle>
-              <CardDescription>
-                {(selectedNode.properties.type as string) || selectedNode.type}
-              </CardDescription>
+          <Card className="mt-8 shadow-2xl border-2 border-blue-300 bg-gradient-to-br from-white to-blue-50 animate-in fade-in duration-500">
+            <CardHeader className="border-b-2 border-blue-200">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center text-2xl">
+                  <div className={`p-3 rounded-xl mr-3 ${
+                    selectedNode.type === 'event' ? 'bg-red-100' :
+                    selectedNode.type === 'equipment' ? 'bg-blue-100' :
+                    selectedNode.type === 'procedure' ? 'bg-yellow-100' :
+                    'bg-green-100'
+                  }`}>
+                    {getNodeIcon(selectedNode.type)}
+                  </div>
+                  <span>{selectedNode.label}</span>
+                </CardTitle>
+                <span className={`px-4 py-2 rounded-full text-sm font-medium ${getNodeColor(selectedNode.type)}`}>
+                  {(selectedNode.properties.type as string) || selectedNode.type}
+                </span>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
-                  <h4 className="font-semibold mb-2">属性信息</h4>
-                  <div className="space-y-2">
+                  <h4 className="font-bold text-lg mb-4 flex items-center">
+                    <div className="h-1 w-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mr-2"></div>
+                    属性信息
+                  </h4>
+                  <div className="space-y-3 bg-white p-4 rounded-xl border-2 border-blue-200">
                     {Object.entries(selectedNode.properties).map(([key, value]) => (
-                      <div key={key} className="flex justify-between">
-                        <span className="text-gray-600">{key}:</span>
-                        <span className="font-medium">{String(value)}</span>
+                      <div key={key} className="flex justify-between items-center pb-2 border-b border-gray-200 last:border-0">
+                        <span className="text-gray-600 font-medium">{key}</span>
+                        <span className="font-semibold text-gray-900">{String(value)}</span>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <h4 className="font-semibold mb-2">相关关系</h4>
-                  <div className="space-y-2">
+                  <h4 className="font-bold text-lg mb-4 flex items-center">
+                    <div className="h-1 w-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mr-2"></div>
+                    相关关系
+                  </h4>
+                  <div className="space-y-3">
                     {graphData.edges
                       .filter(edge => edge.source === selectedNode.id || edge.target === selectedNode.id)
                       .map((edge) => {
@@ -349,10 +416,13 @@ export default function KnowledgePage() {
                           n => n.id === (edge.source === selectedNode.id ? edge.target : edge.source)
                         )
                         return (
-                          <div key={edge.id} className="text-sm">
-                            <span className="font-medium">{relatedNode?.label}</span>
-                            <span className="text-gray-500 mx-2">-</span>
-                            <span className="text-blue-600">{edge.properties.relationship as string}</span>
+                          <div key={edge.id} className="bg-white p-4 rounded-xl border-2 border-purple-200 hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-gray-900">{relatedNode?.label}</span>
+                              <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full">
+                                {edge.properties.relationship as string}
+                              </span>
+                            </div>
                           </div>
                         )
                       })}

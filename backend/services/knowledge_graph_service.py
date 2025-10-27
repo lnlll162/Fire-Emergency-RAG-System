@@ -139,15 +139,12 @@ class KnowledgeGraphService:
     
     async def get_environment_info(self, location: str) -> Optional[EnvironmentInfo]:
         """获取环境信息"""
+        # 修改查询以匹配Neo4j数据结构中的area字段
         query = """
-        MATCH (e:Environment {location: $location})
-        OPTIONAL MATCH (e)-[:HAS_CONDITION]->(c:Condition)
-        OPTIONAL MATCH (e)-[:HAS_RISK]->(r:Risk)
-        OPTIONAL MATCH (e)-[:HAS_RECOMMENDATION]->(rec:Recommendation)
-        RETURN e.location as location,
-               collect(DISTINCT {key: c.key, value: c.value}) as conditions,
-               collect(DISTINCT r.description) as risks,
-               collect(DISTINCT rec.description) as recommendations
+        MATCH (e:Environment)
+        WHERE e.area = $location OR e.name = $location
+        RETURN e.name as location,
+               e as environment_props
         """
         
         try:
@@ -158,17 +155,38 @@ class KnowledgeGraphService:
                 if not record:
                     return None
                 
-                # 处理条件字典
-                conditions = {}
-                for cond in record["conditions"]:
-                    if cond["key"] and cond["value"]:
-                        conditions[cond["key"]] = cond["value"]
+                # 从环境节点属性中提取信息
+                env_props = record["environment_props"]
+                conditions = {
+                    "type": env_props.get("type", ""),
+                    "area": env_props.get("area", ""),
+                    "fire_characteristics": env_props.get("fire_characteristics", ""),
+                    "ventilation_level": env_props.get("ventilation_level", ""),
+                    "evacuation_difficulty": env_props.get("evacuation_difficulty", ""),
+                    "floor_range": env_props.get("floor_range", ""),
+                    "occupancy_density": env_props.get("occupancy_density", "")
+                }
+                
+                # 基于环境属性生成风险和建议
+                risks = []
+                recommendations = []
+                
+                if env_props.get("fire_characteristics"):
+                    risks.append(env_props.get("fire_characteristics"))
+                
+                if env_props.get("evacuation_difficulty") in ["高", "极高"]:
+                    risks.append("疏散困难，需要预留更多疏散时间")
+                    recommendations.append("提前规划疏散路线，确保疏散通道畅通")
+                
+                if env_props.get("ventilation_level") in ["差", "很差"]:
+                    risks.append("通风不良，烟雾积聚风险高")
+                    recommendations.append("加强通风，避免烟雾中毒")
                 
                 return EnvironmentInfo(
                     location=record["location"],
                     conditions=conditions,
-                    risks=[r for r in record["risks"] if r],
-                    recommendations=[rec for rec in record["recommendations"] if rec]
+                    risks=risks,
+                    recommendations=recommendations
                 )
         except Exception as e:
             logger.error(f"查询环境信息失败: {str(e)}")
