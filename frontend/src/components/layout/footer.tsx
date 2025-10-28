@@ -16,7 +16,7 @@ export default function Footer() {
           <div className="flex items-center justify-center">
             <FireIcon className="h-6 w-6 text-red-600" />
             <p className="ml-2 text-center text-xs leading-5 text-gray-500">
-              &copy; 2024 消防应急RAG系统. 基于RAG技术的智能消防应急响应系统.
+              &copy; 2025 消防应急RAG系统. 基于RAG技术的智能消防应急响应系统.
             </p>
           </div>
         </div>

@@ -382,40 +382,39 @@ class OllamaService:
 
 ## 输出要求
 
-请严格按照以下格式生成救援方案：
+请严格按照以下格式生成救援方案，必须包含每个步骤的完整详细信息：
 
 ### 第一步：立即响应
-- 描述：[具体操作描述]
-- 所需设备：灭火器，消防斧，防护服
-- 注意事项：确保自身安全，保持通讯畅通
-- 预计时间：5分钟
+- 描述：迅速拨打119报警，组织现场人员有序撤离，关闭电源和燃气阀门，避免火势蔓延
+- 所需设备：手机，应急照明灯，扩音器，防烟面罩
+- 注意事项：确保自身安全，保持冷静，优先疏散老人和儿童，不要使用电梯
+- 预计时间：3分钟
 
 ### 第二步：火势控制
-- 描述：[具体操作描述]
-- 所需设备：[设备列表]
-- 注意事项：[安全提醒]
-- 预计时间：[时长]
+- 描述：使用适当的灭火器材对火源进行初期扑救，切断火势蔓延路径，重点保护重要设施
+- 所需设备：干粉灭火器，消防水带，防火毯，防护服，呼吸器
+- 注意事项：注意风向，站在上风位置，保持安全距离，不要贸然进入浓烟区域
+- 预计时间：10分钟
 
 ### 第三步：人员疏散
-- 描述：[具体操作描述]
-- 所需设备：[设备列表]
-- 注意事项：[安全提醒]
-- 预计时间：[时长]
+- 描述：引导所有人员按照疏散指示标志撤离，清点人数，确认无人员滞留
+- 所需设备：应急灯，对讲机，急救箱，警戒带
+- 注意事项：低姿前进，用湿毛巾捂住口鼻，不要返回火场，到达安全区域后立即清点人数
+- 预计时间：5分钟
 
 ### 第四步：现场清理
-- 描述：[具体操作描述]
-- 所需设备：[设备列表]
-- 注意事项：[安全提醒]
-- 预计时间：[时长]
+- 描述：确认火势完全扑灭，检查是否有复燃风险，清理现场残留危险物品，评估损失
+- 所需设备：热成像仪，清理工具，警戒标识，相机
+- 注意事项：等待消防队确认安全，注意建筑结构稳定性，做好现场保护工作
+- 预计时间：15分钟
 
-注意：
-1. 每个步骤必须包含完整的描述、设备、注意事项和时间
-2. 步骤描述要具体、可操作
-3. 设备列表用逗号分隔
-4. 注意事项要突出安全要点
-5. 时间估计要合理
+重要：你必须严格按照上述格式生成4个完整步骤，每个步骤必须包含：
+1. 描述：具体、可操作的行动说明（至少15个字）
+2. 所需设备：详细的设备清单（至少列出3-5项）
+3. 注意事项：安全要点和注意事项（至少列出2-3条）
+4. 预计时间：合理的时间估计（3-20分钟）
 
-请现在生成救援方案：
+现在请生成救援方案：
 """
         return prompt
     
@@ -466,35 +465,41 @@ class OllamaService:
                     step_number += 1
                     current_section = None
                 
-                # 如果在步骤内，解析各个字段
+                # 如果在步骤内，解析各个字段（支持Markdown加粗语法 **）
                 elif current_step:
-                    # 检测描述
-                    desc_match = re.match(r'^-?\s*(描述|说明)[：:](.+)', line)
+                    # 检测描述（支持 **描述** 或 描述）
+                    desc_match = re.match(r'^-?\s*\**(描述|说明)\**[：:](.+)', line)
                     if desc_match:
                         desc_text = desc_match.group(2).strip()
                         if desc_text and desc_text != "[具体操作描述]":
                             current_step.description = desc_text
                         current_section = 'description'
                     
-                    # 检测设备
-                    elif re.match(r'^-?\s*所需设备[：:]', line):
+                    # 检测设备（支持 **所需设备** 或 所需设备）
+                    elif re.match(r'^-?\s*\**所需设备\**[：:]', line):
                         current_section = 'equipment'
-                        equipment_text = re.sub(r'^-?\s*所需设备[：:]', '', line).strip()
+                        equipment_text = re.sub(r'^-?\s*\**所需设备\**[：:]', '', line).strip()
+                        # 移除可能的句号
+                        equipment_text = equipment_text.rstrip('。.')
                         if equipment_text and equipment_text != "[设备列表]":
                             equipment_items = [eq.strip() for eq in re.split(r'[,，、]', equipment_text) if eq.strip()]
                             current_step.equipment.extend(equipment_items)
                     
-                    # 检测注意事项
-                    elif re.match(r'^-?\s*注意事项[：:]', line):
+                    # 检测注意事项（支持 **注意事项** 或 注意事项）
+                    elif re.match(r'^-?\s*\**注意事项\**[：:]', line):
                         current_section = 'warnings'
-                        warning_text = re.sub(r'^-?\s*注意事项[：:]', '', line).strip()
+                        warning_text = re.sub(r'^-?\s*\**注意事项\**[：:]', '', line).strip()
+                        # 移除可能的句号
+                        warning_text = warning_text.rstrip('。.')
                         if warning_text and warning_text != "[安全提醒]":
                             current_step.warnings.append(warning_text)
                     
-                    # 检测预计时间
-                    elif re.match(r'^-?\s*预计时间[：:]', line):
+                    # 检测预计时间（支持 **预计时间** 或 预计时间）
+                    elif re.match(r'^-?\s*\**预计时间\**[：:]', line):
                         current_section = 'time'
-                        time_text = re.sub(r'^-?\s*预计时间[：:]', '', line).strip()
+                        time_text = re.sub(r'^-?\s*\**预计时间\**[：:]', '', line).strip()
+                        # 移除可能的句号
+                        time_text = time_text.rstrip('。.')
                         time_match = re.search(r'(\d+)\s*分钟', time_text)
                         if time_match:
                             current_step.estimated_time = int(time_match.group(1))
@@ -611,10 +616,16 @@ class OllamaService:
             
             response = await self.generate_text(generation_request)
             
+            # 打印原始响应用于调试
+            logger.info(f"🔍 Ollama原始响应（前500字符）: {response.response[:500]}")
+            
             # 解析救援方案
             rescue_plan = self._parse_rescue_plan_response(response.response, request.urgency_level)
             
-            logger.info(f"救援方案生成成功，包含 {len(rescue_plan.steps)} 个步骤")
+            # 打印解析结果
+            logger.info(f"✅ 救援方案生成成功，包含 {len(rescue_plan.steps)} 个步骤")
+            for i, step in enumerate(rescue_plan.steps, 1):
+                logger.info(f"   步骤{i}: {step.description[:50]}... | 设备数: {len(step.equipment)} | 注意事项数: {len(step.warnings)}")
             return rescue_plan
             
         except Exception as e:

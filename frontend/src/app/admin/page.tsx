@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { systemAPI, type SystemStatus } from '@/lib/api'
+import { systemAPI } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
 import { 
   CogIcon,
@@ -64,7 +64,6 @@ const mockServices: ServiceStatus[] = [
 ]
 
 export default function AdminPage() {
-  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
@@ -75,16 +74,9 @@ export default function AdminPage() {
   const loadSystemStatus = async () => {
     setIsLoading(true)
     try {
-      const status = await systemAPI.getStatus()
-      setSystemStatus(status)
+      await systemAPI.getStatus()
     } catch (error) {
       console.error('Failed to load system status:', error)
-      // 使用模拟数据
-      setSystemStatus({
-        services: {},
-        databases: { postgres: true, neo4j: true },
-        overall_status: 'healthy'
-      })
     } finally {
       setIsLoading(false)
       setLastRefresh(new Date())
@@ -104,18 +96,6 @@ export default function AdminPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'stopped':
-        return 'bg-red-100 text-red-800 border-red-200'
-      case 'error':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
@@ -231,7 +211,6 @@ export default function AdminPage() {
                       'bg-purple-100'
                     }`}>
                       {getStatusIcon(service.status)}
-                      <CheckCircleIcon className="h-6 w-6 text-green-600" />
                     </div>
                     <div>
                       <h3 className="font-bold text-lg text-gray-900 group-hover:text-purple-600 transition-colors">{service.name}</h3>

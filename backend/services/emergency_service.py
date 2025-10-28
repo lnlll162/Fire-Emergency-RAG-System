@@ -446,7 +446,9 @@ class EmergencyService:
             return rescue_plan
             
         except Exception as e:
-            logger.error(f"生成救援方案失败: {str(e)}")
+            logger.error(f"生成救援方案失败: {str(e)}", exc_info=True)
+            logger.warning("⚠️ Ollama服务调用失败，将使用降级救援方案")
+            logger.info(f"失败原因: {type(e).__name__}: {str(e)}")
             # 返回默认救援方案
             return self._create_fallback_rescue_plan(request)
     
@@ -461,34 +463,54 @@ class EmergencyService:
         elif request.urgency_level in ["低", "一般"]:
             priority = PriorityLevel.LOW
         
-        # 创建基本救援步骤
+        # 创建基本救援步骤（包含详细信息）
         steps = [
             RescueStep(
                 step_number=1,
-                description="立即报警并疏散人员",
-                equipment=["通信设备", "疏散指示牌"],
-                warnings=["确保所有人员安全撤离", "保持冷静"],
+                description="立即拨打119报警，启动应急预案，组织现场人员按疏散路线有序撤离，同时关闭电源和燃气阀门，防止火势蔓延",
+                equipment=["手机或对讲机", "应急照明灯", "扩音器", "防烟面罩", "疏散指示牌"],
+                warnings=[
+                    "确保所有人员安全撤离，优先疏散老人、儿童和行动不便者",
+                    "保持冷静，不要惊慌，避免发生踩踏事故",
+                    "不要使用电梯，选择楼梯疏散",
+                    "低姿前进，用湿毛巾捂住口鼻"
+                ],
                 estimated_time=5
             ),
             RescueStep(
                 step_number=2,
-                description="评估火势和现场情况",
-                equipment=["防护装备", "检测设备"],
-                warnings=["注意自身安全", "避免进入危险区域"],
+                description="专业消防人员到达前，使用现场灭火器材进行初期火灾扑救，切断火势蔓延路径，重点保护重要设施和疏散通道",
+                equipment=["干粉灭火器", "二氧化碳灭火器", "消防水带", "防火毯", "防护服", "消防斧"],
+                warnings=[
+                    "选择合适的灭火器材，电器火灾不能用水扑救",
+                    "注意风向，站在上风位置进行灭火",
+                    "保持安全距离，火势较大时应立即撤离",
+                    "不要贸然进入浓烟区域，避免中毒窒息"
+                ],
                 estimated_time=10
             ),
             RescueStep(
                 step_number=3,
-                description="使用适当的灭火器材进行灭火",
-                equipment=["灭火器", "消防水带"],
-                warnings=["选择合适的灭火器材", "注意风向"],
-                estimated_time=20
+                description="引导所有人员按照疏散指示标志撤离到安全区域，在集合点清点人数，确认无人员滞留，及时向消防队报告现场情况",
+                equipment=["应急灯", "对讲机", "急救箱", "警戒带", "人员名册", "扩音设备"],
+                warnings=[
+                    "到达安全区域后立即清点人数，确认无人员失踪",
+                    "如发现有人员未撤出，立即通知消防救援人员",
+                    "不要返回火场取物品，避免二次伤害",
+                    "对受伤人员进行紧急救护，等待医疗救援"
+                ],
+                estimated_time=5
             ),
             RescueStep(
                 step_number=4,
-                description="确保火势完全扑灭并检查现场",
-                equipment=["检测设备", "照明设备"],
-                warnings=["确保无复燃风险", "检查是否有人员受伤"],
+                description="等待消防队确认火势完全扑灭，使用热成像仪检查是否有隐藏火点，清理现场残留危险物品，评估损失并做好现场保护工作",
+                equipment=["热成像仪", "清理工具", "警戒标识", "照明设备", "相机或摄像机", "检测仪器"],
+                warnings=[
+                    "等待消防队确认安全后再进入现场",
+                    "确保无复燃风险，检查所有可能的隐患点",
+                    "注意建筑结构稳定性，防止次生灾害",
+                    "做好现场保护和证据留存工作，配合后续调查"
+                ],
                 estimated_time=15
             )
         ]

@@ -22,7 +22,7 @@ export function GraphVisualization({ nodes, edges, selectedNodeId, onNodeClick }
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasNodes, setCanvasNodes] = useState<CanvasNode[]>([])
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | undefined>()
 
   useEffect(() => {
     if (!canvasRef.current) return

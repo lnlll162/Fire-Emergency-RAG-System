@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
@@ -8,12 +8,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { emergencyAPI, type EmergencyResponse } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
+import { useLocalStorage } from '@/hooks/useLocalStorage'
+import { apiCache } from '@/utils/cache'
+import RescuePlanGenerator from '@/components/RescuePlanGenerator'
 import { 
   ExclamationTriangleIcon, 
   ClockIcon, 
   CheckCircleIcon,
   DocumentTextIcon,
-  SparklesIcon
+  SparklesIcon,
+  FireIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline'
 
 interface QueryHistory {
@@ -24,13 +29,15 @@ interface QueryHistory {
 }
 
 export default function EmergencyPage() {
+  const [activeTab, setActiveTab] = useState<'qa' | 'rescue'>('qa')
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentResponse, setCurrentResponse] = useState<EmergencyResponse | null>(null)
-  const [history, setHistory] = useState<QueryHistory[]>([])
+  const [history, setHistory] = useLocalStorage<QueryHistory[]>('emergency-history', [])
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 使用 useCallback 优化事件处理函数
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
 
@@ -38,7 +45,18 @@ export default function EmergencyPage() {
     setError(null)
 
     try {
-      const response = await emergencyAPI.query({ query })
+      // 检查缓存
+      const cacheKey = `emergency-query:${query}`
+      const cachedResponse = apiCache.get<EmergencyResponse>(cacheKey)
+      
+      let response: EmergencyResponse
+      if (cachedResponse) {
+        response = cachedResponse
+      } else {
+        response = await emergencyAPI.query({ query })
+        apiCache.set(cacheKey, response) // 使用默认缓存时间
+      }
+      
       setCurrentResponse(response)
       
       // 添加到历史记录
@@ -56,9 +74,10 @@ export default function EmergencyPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [query, setHistory])
 
-  const quickQueries = [
+  // 使用 useMemo 优化静态数据
+  const quickQueries = useMemo(() => [
     { text: '火灾逃生路线', icon: '🚪' },
     { text: '消防器材使用方法', icon: '🧯' },
     { text: '紧急疏散程序', icon: '🏃' },
@@ -67,11 +86,32 @@ export default function EmergencyPage() {
     { text: '电器火灾处理', icon: '⚡' },
     { text: '高层建筑逃生', icon: '🏢' },
     { text: '化学品火灾应对', icon: '⚗️' }
-  ]
+  ], [])
+
+  // 使用 useCallback 优化快速查询点击
+  const handleQuickQuery = useCallback((queryText: string) => {
+    setQuery(queryText)
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50 to-orange-50">
-      <div className="max-w-6xl mx-auto px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50 to-orange-50 relative overflow-hidden">
+      {/* 消防主题背景装饰 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-5">
+        <FireIcon className="absolute top-20 right-10 h-64 w-64 text-red-600 animate-pulse" />
+        <FireIcon className="absolute bottom-20 left-10 h-48 w-48 text-orange-600" />
+        <ExclamationTriangleIcon className="absolute top-1/2 left-1/4 h-32 w-32 text-yellow-600" />
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-12 relative z-10">
+        {/* 紧急提示横幅 */}
+        <div className="mb-8 bg-gradient-to-r from-red-600 via-orange-600 to-red-600 rounded-2xl p-1 shadow-lg animate-pulse">
+          <div className="bg-white rounded-xl p-4 flex items-center justify-center">
+            <FireIcon className="h-6 w-6 text-red-600 mr-3" />
+            <span className="text-red-600 font-bold text-lg">🚨 应急查询系统 - 快速响应，专业指导</span>
+            <ExclamationTriangleIcon className="h-6 w-6 text-orange-600 ml-3" />
+          </div>
+        </div>
+
         {/* 页面标题 */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center px-4 py-2 mb-4 bg-red-100 text-red-800 rounded-full text-sm font-medium">
@@ -86,27 +126,58 @@ export default function EmergencyPage() {
           </p>
         </div>
 
-        {/* 快速查询标签 */}
+        {/* 功能切换标签 */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <SparklesIcon className="h-5 w-5 mr-2 text-red-600" />
-            快速查询
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {quickQueries.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => setQuery(item.text)}
-                className="group relative p-4 bg-white hover:bg-gradient-to-br hover:from-red-50 hover:to-orange-50 border-2 border-gray-200 hover:border-red-300 rounded-xl transition-all transform hover:scale-105 hover:shadow-lg text-left"
-              >
-                <div className="text-2xl mb-2">{item.icon}</div>
-                <div className="text-sm font-medium text-gray-900 group-hover:text-red-600 transition-colors">
-                  {item.text}
-                </div>
-              </button>
-            ))}
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => setActiveTab('qa')}
+              className={`flex items-center px-8 py-4 rounded-xl font-semibold text-lg transition-all transform hover:scale-105 ${
+                activeTab === 'qa'
+                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-xl'
+                  : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-blue-400 shadow-md'
+              }`}
+            >
+              <ChatBubbleLeftRightIcon className="h-6 w-6 mr-3" />
+              智能问答
+            </button>
+            <button
+              onClick={() => setActiveTab('rescue')}
+              className={`flex items-center px-8 py-4 rounded-xl font-semibold text-lg transition-all transform hover:scale-105 ${
+                activeTab === 'rescue'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-xl'
+                  : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-red-400 shadow-md'
+              }`}
+            >
+              <FireIcon className="h-6 w-6 mr-3" />
+              救援方案生成
+            </button>
           </div>
         </div>
+
+        {/* 智能问答区域 */}
+        {activeTab === 'qa' && (
+          <>
+            {/* 快速查询标签 */}
+            <div className="mb-8 animate-in fade-in duration-300">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <SparklesIcon className="h-5 w-5 mr-2 text-red-600" />
+                快速查询
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {quickQueries.map((item, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleQuickQuery(item.text)}
+                    className="group relative p-4 bg-white hover:bg-gradient-to-br hover:from-red-50 hover:to-orange-50 border-2 border-gray-200 hover:border-red-300 rounded-xl transition-all transform hover:scale-105 hover:shadow-lg text-left"
+                  >
+                    <div className="text-2xl mb-2">{item.icon}</div>
+                    <div className="text-sm font-medium text-gray-900 group-hover:text-red-600 transition-colors">
+                      {item.text}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
         {/* 查询表单 */}
         <Card className="mb-8 shadow-xl border-2 hover:border-red-200 transition-colors">
@@ -240,70 +311,79 @@ export default function EmergencyPage() {
           </Card>
         )}
 
-        {/* 查询历史 */}
-        {history.length > 0 && (
-          <Card className="shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-gray-50 to-blue-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-2xl">查询历史</CardTitle>
-                  <CardDescription className="text-base">最近的查询记录</CardDescription>
-                </div>
-                <div className="text-sm font-medium text-gray-600 bg-white px-4 py-2 rounded-full border-2 border-gray-200">
-                  共 {history.length} 条记录
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                {history.slice(0, 5).map((item, index) => (
-                  <div 
-                    key={item.id} 
-                    className="group border-2 border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer transform hover:scale-[1.02]"
-                    onClick={() => {
-                      setQuery(item.query)
-                      setCurrentResponse(item.response)
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center flex-1">
-                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold mr-3">
-                          {index + 1}
-                        </div>
-                        <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{item.query}</h4>
-                      </div>
-                      <span className="text-sm text-gray-500 ml-4 flex-shrink-0">{formatRelativeTime(item.timestamp)}</span>
+            {/* 查询历史 */}
+            {history.length > 0 && (
+              <Card className="shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-blue-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl">查询历史</CardTitle>
+                      <CardDescription className="text-base">最近的查询记录</CardDescription>
                     </div>
-                    <p className="text-sm text-gray-600 line-clamp-2 ml-11 mb-3 leading-relaxed">{item.response.response}</p>
-                    <div className="flex items-center ml-11 space-x-4">
-                      <div className="flex items-center text-xs text-gray-500">
-                        <div className="w-16 bg-gray-200 rounded-full h-1.5 mr-2">
-                          <div 
-                            className="bg-blue-500 h-1.5 rounded-full" 
-                            style={{ width: `${item.response.confidence * 100}%` }}
-                          ></div>
-                        </div>
-                        <span className="font-medium">置信度 {Math.round(item.response.confidence * 100)}%</span>
-                      </div>
-                      {item.response.sources.length > 0 && (
-                        <div className="flex items-center text-xs text-gray-500">
-                          <DocumentTextIcon className="h-4 w-4 mr-1" />
-                          <span>{item.response.sources.length} 个来源</span>
-                        </div>
-                      )}
+                    <div className="text-sm font-medium text-gray-600 bg-white px-4 py-2 rounded-full border-2 border-gray-200">
+                      共 {history.length} 条记录
                     </div>
                   </div>
-                ))}
-              </div>
-              {history.length > 5 && (
-                <div className="mt-6 text-center">
-                  <Button variant="outline" className="border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50">
-                    查看更多历史记录 ({history.length - 5} 条)
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    {history.slice(0, 5).map((item, index) => (
+                      <div 
+                        key={item.id} 
+                        className="group border-2 border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer transform hover:scale-[1.02]"
+                        onClick={() => {
+                          setQuery(item.query)
+                          setCurrentResponse(item.response)
+                        }}
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center flex-1">
+                            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold mr-3">
+                              {index + 1}
+                            </div>
+                            <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{item.query}</h4>
+                          </div>
+                          <span className="text-sm text-gray-500 ml-4 flex-shrink-0">{formatRelativeTime(item.timestamp)}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 line-clamp-2 ml-11 mb-3 leading-relaxed">{item.response.response}</p>
+                        <div className="flex items-center ml-11 space-x-4">
+                          <div className="flex items-center text-xs text-gray-500">
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5 mr-2">
+                              <div 
+                                className="bg-blue-500 h-1.5 rounded-full" 
+                                style={{ width: `${item.response.confidence * 100}%` }}
+                              ></div>
+                            </div>
+                            <span className="font-medium">置信度 {Math.round(item.response.confidence * 100)}%</span>
+                          </div>
+                          {item.response.sources.length > 0 && (
+                            <div className="flex items-center text-xs text-gray-500">
+                              <DocumentTextIcon className="h-4 w-4 mr-1" />
+                              <span>{item.response.sources.length} 个来源</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {history.length > 5 && (
+                    <div className="mt-6 text-center">
+                      <Button variant="outline" className="border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50">
+                        查看更多历史记录 ({history.length - 5} 条)
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* 救援方案生成器区域 */}
+        {activeTab === 'rescue' && (
+          <div className="animate-in fade-in duration-300">
+            <RescuePlanGenerator />
+          </div>
         )}
       </div>
     </div>

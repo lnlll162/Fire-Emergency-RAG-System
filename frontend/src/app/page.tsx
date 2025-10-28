@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
-  FireIcon, 
   QuestionMarkCircleIcon, 
   ChartBarIcon, 
   CogIcon,
@@ -12,11 +11,14 @@ import {
   ShieldCheckIcon,
   ClockIcon,
   UsersIcon,
-  BoltIcon,
   DocumentTextIcon,
-  CpuChipIcon
+  CpuChipIcon,
+  FireIcon,
+  ExclamationTriangleIcon,
+  ShieldExclamationIcon
 } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
+import FireSafetyTips, { SafetyChecklist } from '@/components/FireSafetyTips'
 
 const features = [
   {
@@ -68,6 +70,14 @@ export default function Home() {
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-red-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-orange-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
         <div className="absolute top-40 left-40 w-96 h-96 bg-yellow-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+        
+        {/* 消防元素装饰 */}
+        <div className="absolute top-20 right-20 opacity-5">
+          <FireIcon className="h-64 w-64 text-red-600 animate-pulse" />
+        </div>
+        <div className="absolute bottom-20 left-20 opacity-5">
+          <ShieldExclamationIcon className="h-48 w-48 text-orange-600" />
+        </div>
       </div>
 
       {/* 主要内容 */}
@@ -75,9 +85,11 @@ export default function Home() {
         {/* 英雄区域 */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className={`text-center transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            <div className="inline-flex items-center px-4 py-2 mb-6 bg-red-100 text-red-800 rounded-full text-sm font-medium">
-              <BoltIcon className="h-4 w-4 mr-2" />
-              智能 · 快速 · 精准
+            {/* 消防主题徽章 */}
+            <div className="inline-flex items-center px-6 py-3 mb-8 bg-gradient-to-r from-red-100 via-orange-100 to-yellow-100 text-red-800 rounded-full text-sm font-semibold shadow-lg border-2 border-red-200 animate-pulse">
+              <FireIcon className="h-5 w-5 mr-2 text-red-600" />
+              智能消防应急系统 · 快速响应 · 精准指导
+              <ExclamationTriangleIcon className="h-5 w-5 ml-2 text-orange-600" />
             </div>
             <h1 className="text-4xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
               消防应急
@@ -177,6 +189,39 @@ export default function Home() {
           </div>
         </div>
 
+        {/* 消防安全提示 */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="bg-gradient-to-r from-red-600 via-orange-600 to-red-600 rounded-3xl p-1 shadow-2xl">
+            <div className="bg-white rounded-3xl p-8 md:p-12">
+              <div className="flex items-center justify-center mb-6">
+                <div className="p-4 bg-red-100 rounded-full animate-pulse">
+                  <FireIcon className="h-12 w-12 text-red-600" />
+                </div>
+              </div>
+              <h3 className="text-3xl font-bold text-center text-gray-900 mb-6">
+                🔥 消防安全，人人有责
+              </h3>
+              <div className="grid md:grid-cols-3 gap-6 text-center">
+                <div className="p-6 bg-red-50 rounded-2xl border-2 border-red-200 hover:shadow-lg transition-all">
+                  <div className="text-4xl mb-3">🚨</div>
+                  <h4 className="font-bold text-gray-900 mb-2">发现火情</h4>
+                  <p className="text-gray-600 text-sm">立即拨打119报警</p>
+                </div>
+                <div className="p-6 bg-orange-50 rounded-2xl border-2 border-orange-200 hover:shadow-lg transition-all">
+                  <div className="text-4xl mb-3">🧯</div>
+                  <h4 className="font-bold text-gray-900 mb-2">初期扑救</h4>
+                  <p className="text-gray-600 text-sm">正确使用消防器材</p>
+                </div>
+                <div className="p-6 bg-yellow-50 rounded-2xl border-2 border-yellow-200 hover:shadow-lg transition-all">
+                  <div className="text-4xl mb-3">🚪</div>
+                  <h4 className="font-bold text-gray-900 mb-2">紧急疏散</h4>
+                  <p className="text-gray-600 text-sm">保持冷静有序撤离</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 技术特点 */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -251,6 +296,48 @@ export default function Home() {
               <div className="absolute -top-6 -right-6 w-24 h-24 bg-red-400 rounded-full opacity-20 blur-2xl"></div>
               <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-orange-400 rounded-full opacity-20 blur-2xl"></div>
             </div>
+          </div>
+        </div>
+
+        {/* 消防器材知识卡片 */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">常见消防器材</h2>
+            <p className="text-lg text-gray-600">了解消防器材，掌握正确使用方法</p>
+          </div>
+          
+          <div className="grid md:grid-cols-4 gap-6">
+            <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-red-200 hover:border-red-400 transition-all hover:scale-105 cursor-pointer">
+              <div className="text-5xl text-center mb-4">🧯</div>
+              <h3 className="font-bold text-gray-900 text-center mb-2">灭火器</h3>
+              <p className="text-sm text-gray-600 text-center">干粉灭火器适用于各类初期火灾</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-blue-200 hover:border-blue-400 transition-all hover:scale-105 cursor-pointer">
+              <div className="text-5xl text-center mb-4">💧</div>
+              <h3 className="font-bold text-gray-900 text-center mb-2">消防栓</h3>
+              <p className="text-sm text-gray-600 text-center">室内外消防栓用于大面积灭火</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-green-200 hover:border-green-400 transition-all hover:scale-105 cursor-pointer">
+              <div className="text-5xl text-center mb-4">🚨</div>
+              <h3 className="font-bold text-gray-900 text-center mb-2">报警器</h3>
+              <p className="text-sm text-gray-600 text-center">烟感报警器及时发现火情</p>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-yellow-200 hover:border-yellow-400 transition-all hover:scale-105 cursor-pointer">
+              <div className="text-5xl text-center mb-4">🪜</div>
+              <h3 className="font-bold text-gray-900 text-center mb-2">逃生梯</h3>
+              <p className="text-sm text-gray-600 text-center">应急逃生梯用于高层逃生</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 消防安全提示组件 */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid md:grid-cols-2 gap-6">
+            <FireSafetyTips />
+            <SafetyChecklist />
           </div>
         </div>
       </div>
